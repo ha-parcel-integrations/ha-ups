@@ -628,6 +628,55 @@ async def test_a_hotter_parcel_cannot_starve_a_colder_one(hass, real_budget):
     assert coordinator._fetch_queue([*codes, ACTIVE_CODE])[0] != ACTIVE_CODE
 
 
+async def test_a_rotation_longer_than_the_band_cannot_lock_a_code_out(
+    hass, real_budget
+):
+    """Observed live 2026-09-08: nine consecutive cycles split between three
+    codes while a fourth, which had never returned a payload, was passed over
+    every time.
+
+    A fixed band shorter than a full rotation leaves some other code pinned at
+    it on every cycle, so the starved code never becomes *strictly* the most
+    overdue and loses the status tie-break forever. Nine cycles is well past
+    any transient unfairness — this asserts the lockout cannot form at all.
+    """
+    movers = [f"1Z{n}" for n in range(3)]
+    starved = ACTIVE_CODE
+    entry = _entry_with(
+        [{CONF_TRACKING_CODE: code} for code in [*movers, starved]]
+    )
+    entry.add_to_hass(hass)
+    coordinator = UPSCoordinator(hass, _fake_client(), entry)
+    coordinator._attempted_codes = {*movers, starved}
+    coordinator._status_by_code = {
+        **{code: ParcelStatus.IN_TRANSIT for code in movers},
+        # Never returned a payload, so it has no status of its own.
+        starved: ParcelStatus.UNKNOWN,
+    }
+
+    now = time.time()
+    cycle = REQUEST_BUDGET_REFILL_SECONDS
+    coordinator._last_fetch_by_code = {
+        # The movers are already rotating; the starved one is a day behind.
+        **{code: now - (i + 1) * cycle for i, code in enumerate(movers)},
+        starved: now - 24 * 3600,
+    }
+
+    # Advance by shifting every stamp back one interval rather than moving the
+    # clock, so the test needs no patching to walk nine cycles.
+    served = []
+    for _ in range(9):
+        picked = coordinator._fetch_queue([*movers, starved])[0]
+        served.append(picked)
+        coordinator._last_fetch_by_code = {
+            code: stamp - cycle
+            for code, stamp in coordinator._last_fetch_by_code.items()
+        }
+        coordinator._last_fetch_by_code[picked] = time.time()
+
+    assert starved in served, f"starved code never served in {served}"
+
+
 async def test_the_hotter_parcel_still_wins_once_nobody_is_overdue(hass):
     """The overdue band orders stale parcels; it does not outrank status."""
     entry = _entry_with(

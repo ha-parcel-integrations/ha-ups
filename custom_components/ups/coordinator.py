@@ -90,11 +90,18 @@ _QUEUE_PRIORITY = (
     ParcelStatus.AT_PICKUP_POINT,
 )
 
-# How many refill intervals a code may fall behind before the status ranking
-# stops being able to hold it back. Past this every overdue code is equally
-# overdue, so the ranking decides between them again — it orders the stale
-# parcels rather than outranking them.
-_MAX_OVERDUE_INTERVALS = 3
+# Floor under the overdue band: how many refill intervals a code may fall
+# behind before the status ranking stops being able to hold it back. Past the
+# band every overdue code is equally overdue, so the ranking decides between
+# them again — it orders the stale parcels rather than outranking them.
+#
+# It is only a floor because the band has to clear a full rotation, and how
+# long that takes depends on how many codes are sharing the budget. A ceiling
+# below the rotation length stops discriminating exactly where it is needed:
+# some other code is then pinned at it on every cycle, the starved code is
+# never *strictly* the most overdue, and it loses the status tie-break
+# forever rather than merely waiting longer.
+_MIN_OVERDUE_INTERVALS = 3
 
 
 def _resolve_locale(hass: HomeAssistant) -> str:
@@ -552,8 +559,8 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
         * a code we have never attempted comes first. The user added it and
           is watching for it, and it is the only case where waiting an hour
           reads as the integration being broken;
-        * a code that has fallen more than ``_MAX_OVERDUE_INTERVALS`` behind
-          comes next, oldest first, whatever its status;
+        * a code that has fallen a full rotation behind comes next, oldest
+          first, whatever its status;
         * everything else sorts by what can still change soonest, and within
           that by how long it has gone unrefreshed.
 
@@ -574,9 +581,17 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
         goes out, so an attempt that never comes back still counts as a turn
         taken.
         """
+        queued = [code for code in codes if code not in self._delivered_codes]
         ranking = {status: rank for rank, status in enumerate(_QUEUE_PRIORITY)}
         unknown_rank = len(_QUEUE_PRIORITY)
         now = time.time()
+
+        # One request per cycle shared between the queue means each code comes
+        # round every ``len(queued)`` intervals, so the band is sized from the
+        # queue rather than fixed. The extra interval is what makes a code that
+        # has waited a whole rotation out rank strictly ahead of every code
+        # that has already had its turn, instead of merely tying with them.
+        max_overdue = max(_MIN_OVERDUE_INTERVALS, len(queued) + 1)
 
         def sort_key(code: str) -> tuple[int, int, int, float]:
             never_attempted = code not in self._attempted_codes
@@ -584,7 +599,7 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
             last_fetch = self._last_fetch_by_code.get(code, 0.0)
             overdue = min(
                 int((now - last_fetch) // REQUEST_BUDGET_REFILL_SECONDS),
-                _MAX_OVERDUE_INTERVALS,
+                max_overdue,
             )
             return (
                 0 if never_attempted else 1,
@@ -593,10 +608,7 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
                 last_fetch,
             )
 
-        return sorted(
-            (code for code in codes if code not in self._delivered_codes),
-            key=sort_key,
-        )
+        return sorted(queued, key=sort_key)
 
     async def _async_update_data(self) -> list[dict]:
         """Spend at most one request, then republish every tracked parcel.
