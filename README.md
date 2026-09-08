@@ -1,16 +1,17 @@
 # UPS Parcel Tracker
 
 [![Release](https://img.shields.io/github/v/release/ha-parcel-integrations/ha-ups.svg)](https://github.com/ha-parcel-integrations/ha-ups/releases)
+[![Downloads](https://img.shields.io/github/downloads/ha-parcel-integrations/ha-ups/total.svg)](https://github.com/ha-parcel-integrations/ha-ups/releases)
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > 💬 Questions or feedback? Join the discussion on the [Home Assistant community](https://community.home-assistant.io/t/packages-postnl-dhl-nl-dpd-and-gls-parcel-integration/112433/).
 
-> **Pre-1.0.** The status vocabulary is evidence-backed only for a *delivered*
-> shipment end-to-end — `at_pickup_point`, `returning` and `problem` have no
-> confirmed status key yet, and the ETA window, weight and pickup-point
-> fields are held at their empty defaults until an in-flight parcel is
-> captured. See [Troubleshooting](#troubleshooting).
+> **Not everything UPS shows is available here yet.** The ETA window, weight
+> and pickup-point fields stay empty, and `at_pickup_point` has never been seen
+> on a real parcel — UPS's tracking service has not sent any of them on the
+> parcels captured so far. Each one has an open issue you can help close; see
+> [Troubleshooting](#troubleshooting).
 
 A custom Home Assistant integration that tracks your [UPS](https://www.ups.com/track) parcels. No account is needed — you enter the tracking code yourself, just like on the UPS website.
 
@@ -41,7 +42,7 @@ Part of the [ha-parcel-integrations](https://github.com/ha-parcel-integrations) 
 - Track any number of UPS parcels by tracking code — no account needed
 - Per-parcel sensor with the canonical status (`registered` / `in_transit` / `out_for_delivery` / `delivered` / …), the carrier's own status text and a tracking deep-link
 - Summary sensors: incoming parcels, next delivery, recently delivered parcels
-- Read-only **Deliveries** calendar (currently stays empty — see the pre-1.0 note above; UPS has no confirmed ETA field yet)
+- Read-only **Deliveries** calendar (currently stays empty — UPS has no confirmed ETA field yet; see the note at the top of this README)
 - `ups.track_parcel` / `ups.untrack_parcel` services, so a dashboard button can add a parcel
 - Events + device triggers for no-code automations (parcel registered, status changed, delivered)
 - Opt-in per-parcel status history
@@ -202,9 +203,9 @@ logger:
 ## Troubleshooting
 
 - **A parcel shows `unknown`** — UPS has not scanned it yet (the endpoint reports the code as not found until the first scan), or the code is wrong. It will pick up automatically once scanned.
-- **A status logs "Unrecognised UPS status"** — please [open an issue](https://github.com/ha-parcel-integrations/ha-ups/issues/new) with the logged line so the mapping can be extended. `at_pickup_point`, `returning` and `problem` are the expected first candidates.
+- **A status logs "Unrecognised UPS status"** — please [open an issue](https://github.com/ha-parcel-integrations/ha-ups/issues/new?template=unrecognised_status.yml) with the logged line so the mapping can be extended. `at_pickup_point` is the one still missing entirely, so a parcel waiting in a UPS Access Point is the most likely source.
 - **A poll logs "UPS fetch failed... request timed out"** — UPS's tracking endpoint answers a well-formed request normally, but silently stops responding instead of returning an error when it doesn't like the request. A single stuck parcel is retried on the next poll and does not affect the others. If *every* parcel starts timing out at once and stays that way across several polls, it's more likely the endpoint temporarily throttling this connection than a one-off — wait it out. The integration stands down for two hours automatically, doubling up to six, and will not let anything force extra requests during that window — measured, that is how long UPS takes to start answering again.
-- **No delivery window / calendar entries** — UPS has no confirmed ETA field yet; `planned_from`/`planned_to` are held at `None` pre-1.0. See the note at the top of this README.
+- **No delivery window / calendar entries** — UPS has no confirmed ETA field yet, so `planned_from`/`planned_to` are held at `None`. [Issue #1](https://github.com/ha-parcel-integrations/ha-ups/issues/1) collects the evidence needed to change that.
 
 ## Related integrations
 
