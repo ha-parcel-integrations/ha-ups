@@ -40,10 +40,12 @@ KNOWN_CAPABILITIES = frozenset(
     {"weight", "dimensions", "delivery_window", "pickup_point", "url", "history"}
 )
 
-# Trimmed to what has actually been observed on the wire. Five real parcels
+# Trimmed to what has actually been observed on the wire. Six real parcels
 # across the full range of states — in transit, in customs, under
 # investigation, delivered, returned to sender — and not one of them carried
-# any of these:
+# any of these. The strongest case is an international delivery that passed
+# customs, incurred import duties, was held three times and had its address
+# corrected, and still carried none:
 #
 # - "weight" is NOT declared: additionalInformation.weight was "" (empty) on
 #   every one of them. normalize_parcel still converts it when present — the
@@ -51,7 +53,7 @@ KNOWN_CAPABILITIES = frozenset(
 # - "dimensions" is NOT declared: no dimension field exists in the payload.
 # - "delivery_window" is NOT declared: planned_from/planned_to are held at
 #   None until an in-flight parcel shows which ETA field (sdd/sdst/sdt/
-#   scheduledDeliveryDateDetail) actually populates. Three of the five were
+#   scheduledDeliveryDateDetail) actually populates. Three of the six were
 #   in flight and none carried one, so this is no longer "not seen yet".
 # - "pickup_point" is NOT declared: upsAccessPoint has only ever been null.
 #
