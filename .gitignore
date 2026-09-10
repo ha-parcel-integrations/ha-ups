@@ -12,7 +12,6 @@ dist/
 
 # Test, coverage & type-check caches
 .pytest_cache/
-.ruff_cache/
 .mypy_cache/
 .dmypy.json
 .coverage
