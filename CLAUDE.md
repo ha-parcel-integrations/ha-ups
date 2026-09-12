@@ -175,8 +175,8 @@ flow is deprecated (an error in HA 2026.12+).
 
 **Tracking-code validation is deliberately permissive.** UPS tracks Mail
 Innovations, InfoNotice and reference numbers through the same field as 1Z
-numbers, and the site forwards whatever a user pastes. Accept any non-empty,
-sane-length code; never enforce the 1Z checksum client-side. The endpoint's own
+numbers, and the site forwards whatever a user pastes. Accept any non-empty
+code, unvalidated; never enforce the 1Z checksum client-side. The endpoint's own
 `errorCode: "504"` is the format-rejection signal.
 
 ## Running tests

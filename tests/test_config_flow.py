@@ -22,14 +22,13 @@ def test_normalize_tracking_code_strips_and_uppercases():
     assert normalize_tracking_code(None) == ""
 
 
-def test_valid_tracking_code_bounds():
+def test_valid_tracking_code_accepts_any_non_empty_code():
     """UPS also tracks Mail Innovations/InfoNotice/reference numbers through
-    this field, so any non-empty, sane-length code is accepted — the 1Z
-    checksum is deliberately not enforced client-side."""
+    this field, so any non-empty code is accepted — the 1Z checksum is
+    deliberately not enforced client-side."""
     assert valid_tracking_code("1Z999AA10123456784")
     assert valid_tracking_code("A")  # not a 1Z number, still accepted
     assert not valid_tracking_code("")
-    assert not valid_tracking_code("A" * 36)  # sane upper bound against garbage
 
 
 async def test_user_flow_shows_confirmation_form_first(hass):
@@ -133,18 +132,6 @@ async def test_options_add_code_with_separators(hass):
     )
     assert result["type"] == "create_entry"
     assert result["data"][CONF_PARCELS] == [{CONF_TRACKING_CODE: "EXAMPLE123456"}]
-
-
-async def test_options_add_invalid_tracking_code(hass):
-    """Any non-empty code is accepted — the only thing the regex still
-    rejects is a code past the sane length bound."""
-    entry = _hub([])
-    entry.add_to_hass(hass)
-    result = await _open_options_step(hass, entry, "parcels")
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"tracking_codes": ["A" * 36]}
-    )
-    assert result["errors"]["base"] == "invalid_tracking_code"
 
 
 async def test_options_de_duplicates_tracking_codes(hass):

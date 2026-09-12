@@ -30,16 +30,6 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# UPS 1Z numbers (1Z + 6-char shipper + 2-digit service + 8 digits + check
-# digit) share this same tracking field with Mail Innovations, InfoNotice and
-# reference numbers, and the site forwards whatever the user pastes: accept
-# any non-empty trimmed string, do NOT enforce the 1Z checksum client-side
-# (it would reject every non-1Z format), and let the endpoint's own
-# errorCode 504 be the format-rejection signal. The only local guard is a
-# sane upper length bound against garbage input.
-_TRACKING_CODE_RE = re.compile(r"^[A-Z0-9]{1,35}$")
-
-
 def normalize_tracking_code(value: str) -> str:
     """Return the tracking code upper-cased with separators stripped.
 
@@ -51,8 +41,14 @@ def normalize_tracking_code(value: str) -> str:
 
 
 def valid_tracking_code(value: str) -> bool:
-    """Whether ``value`` is a non-empty, sane-length tracking code."""
-    return bool(_TRACKING_CODE_RE.match(value))
+    """Accept any non-empty code.
+
+    UPS 1Z numbers share this same tracking field with Mail Innovations,
+    InfoNotice and reference numbers, whose formats vary too much to gate on
+    client-side; the endpoint's own errorCode 504 is the format-rejection
+    signal.
+    """
+    return bool(value)
 
 
 def _current_parcels(entry: ConfigEntry) -> list[dict[str, str]]:
