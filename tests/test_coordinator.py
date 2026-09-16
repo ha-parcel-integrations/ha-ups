@@ -19,7 +19,13 @@ from custom_components.ups.const import (
 )
 from custom_components.ups.coordinator import UPSCoordinator
 
-from .payloads import ACTIVE_CODE, DELIVERED_CODE, active_sample, delivered_sample
+from .payloads import (
+    ACTIVE_CODE,
+    DELIVERED_CODE,
+    active_sample,
+    active_sample_with_eta,
+    delivered_sample,
+)
 
 OTHER_CODE = "1Z888888888888888"
 
@@ -486,11 +492,10 @@ async def test_fires_registered_event_for_new_parcel(hass):
     assert events[0].data["barcode"] == OTHER_CODE
 
 
-async def test_delivery_time_changed_never_fires_for_this_carrier(hass):
-    """planned_from/planned_to are held at None — no confirmed ETA field for
-    an in-flight parcel yet — so this event can never fire for UPS today.
-    Documents the current, real behaviour rather than testing a window this
-    carrier doesn't publish."""
+async def test_delivery_time_changed_fires_when_an_estimate_appears(hass):
+    """sdd/sdst/sdt (confirmed live, issue #1) drive planned_from/planned_to,
+    so a parcel gaining an estimate must fire the event like any other
+    carrier."""
     entry = _entry_with([{CONF_TRACKING_CODE: ACTIVE_CODE}])
     entry.add_to_hass(hass)
     client = _fake_client()
@@ -501,11 +506,15 @@ async def test_delivery_time_changed_never_fires_for_this_carrier(hass):
         f"{DOMAIN}_parcel_delivery_time_changed", lambda e: events.append(e)
     )
 
-    client.async_get_parcel.return_value = _in_transit()
+    client.async_get_parcel.return_value = _in_transit()  # no estimate yet
     await coordinator._async_update_data()  # first refresh: suppressed
 
-    client.async_get_parcel.return_value = active_sample()  # status changes
+    client.async_get_parcel.return_value = active_sample_with_eta()  # estimate appears
     await coordinator._async_update_data()
     await hass.async_block_till_done()
 
-    assert events == []
+    assert len(events) == 1
+    assert events[0].data["new_planned_from"] == "2026-09-18T15:30:00-06:00"
+    assert events[0].data["new_planned_to"] == "2026-09-18T19:30:00-06:00"
+    assert events[0].data["old_planned_from"] is None
+    assert events[0].data["old_planned_to"] is None

@@ -390,6 +390,50 @@ def _delivered_at(raw: dict, delivered: bool) -> str | None:
     return newest
 
 
+def _parse_gmt_offset(offset: str | None) -> timezone | None:
+    """Parse a ``±HH:MM`` offset string (``shipmentGMTInfo``) to a ``timezone``."""
+    if not offset:
+        return None
+    try:
+        return datetime.strptime(offset, "%z").tzinfo
+    except ValueError:
+        return None
+
+
+def _planned_window(raw: dict) -> tuple[str | None, str | None]:
+    """Build ``planned_from``/``planned_to`` from ``sdd``/``sdst``/``sdt``.
+
+    Confirmed live 2026-09-16 (issue #1): ``sdd`` (``YYYYMMDD``), ``sdst`` and
+    ``sdt`` (both ``HH:MM:SS``) carried "Friday September 18 between 3:30
+    P.M. - 7:30 P.M.", matching what ups.com showed for the same parcel. The
+    triplet is local to the recipient, not UTC — ``shipmentGMTInfo``'s
+    ``shipToGMTOffset`` is the only offset in the payload that matches
+    (``-06:00`` against a Saskatchewan address, which never observes DST).
+    ``scheduledDeliveryDateDetail`` (month/day only, no year or time) and
+    ``deliveryAttemptMsgDate`` remain unconfirmed and are not read here.
+    """
+    sdd = raw.get("sdd")
+    sdst = raw.get("sdst")
+    sdt = raw.get("sdt")
+    if not sdd or not sdst or not sdt:
+        return None, None
+
+    gmt_info = raw.get("shipmentGMTInfo")
+    offset = gmt_info.get("shipToGMTOffset") if isinstance(gmt_info, dict) else None
+    tzinfo = _parse_gmt_offset(offset) or timezone.utc
+
+    try:
+        date = datetime.strptime(sdd, "%Y%m%d").date()
+        start_time = datetime.strptime(sdst, "%H:%M:%S").time()
+        end_time = datetime.strptime(sdt, "%H:%M:%S").time()
+    except ValueError:
+        return None, None
+
+    start = datetime.combine(date, start_time, tzinfo=tzinfo)
+    end = datetime.combine(date, end_time, tzinfo=tzinfo)
+    return start.isoformat(), end.isoformat()
+
+
 def _weight_kg(raw: dict) -> float | None:
     """Convert ``additionalInformation.weight`` to kilograms, or ``None``.
 
@@ -621,13 +665,17 @@ def normalize_parcel(
     what keeps address/signature/token fields out of a shared dump — this
     subset is about size, not secrecy.
 
-    ``planned_from``/``planned_to``, ``pickup_point`` and ``dimensions`` stay
-    at their empty defaults — no confirmed field exists yet for any of them
-    (an in-flight ETA, an access-point object, or any dimension field at
-    all). ``pickup`` is the exception: it follows the mapped status, which
-    does know when a parcel is waiting to be collected. ``sender``/``receiver`` stay ``None``: the only
-    candidate fields are a recipient's address and an internal UPS account
-    number, neither a name fit to publish as either.
+    ``planned_from``/``planned_to`` come from ``sdd``/``sdst``/``sdt`` (see
+    :func:`_planned_window`) and stay ``None`` when that triplet is absent —
+    which it is for a parcel with no live estimate, and always for a
+    delivered one (the estimate disappears once a parcel is delivered).
+    ``pickup_point`` and ``dimensions`` stay at their empty defaults — no
+    confirmed field exists yet for either (an access-point object, or any
+    dimension field at all). ``pickup`` is the exception: it follows the
+    mapped status, which does know when a parcel is waiting to be collected.
+    ``sender``/``receiver`` stay ``None``: the only candidate fields are a
+    recipient's address and an internal UPS account number, neither a name
+    fit to publish as either.
     """
     raw_status = _current_milestone_key(raw)
     status = map_parcel_status(raw_status)
@@ -640,6 +688,7 @@ def normalize_parcel(
     tracking_code = requested_code or echoed_code
 
     activities = raw.get("shipmentProgressActivities") or []
+    planned_from, planned_to = _planned_window(raw)
 
     return {
         "carrier": "UPS",
@@ -650,8 +699,8 @@ def normalize_parcel(
         "raw_status": raw_status,
         "delivered": delivered,
         "delivered_at": _delivered_at(raw, delivered),
-        "planned_from": None,
-        "planned_to": None,
+        "planned_from": planned_from,
+        "planned_to": planned_to,
         # Derived from the status, not from a field: no upsAccessPoint object
         # has ever been seen populated, so the location stays None — but a
         # parcel whose milestone says it is waiting to be collected must not

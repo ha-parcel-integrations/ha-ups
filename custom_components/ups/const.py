@@ -51,15 +51,14 @@ KNOWN_CAPABILITIES = frozenset(
 #   every one of them. normalize_parcel still converts it when present — the
 #   field is real and documented, just never seen populated yet.
 # - "dimensions" is NOT declared: no dimension field exists in the payload.
-# - "delivery_window" is NOT declared: planned_from/planned_to are held at
-#   None until an in-flight parcel shows which ETA field (sdd/sdst/sdt/
-#   scheduledDeliveryDateDetail) actually populates. Three of the six were
-#   in flight and none carried one, so this is no longer "not seen yet".
+# - "delivery_window" IS declared: confirmed live 2026-09-16 (issue #1) —
+#   sdd/sdst/sdt carried an estimate that matched ups.com exactly. See
+#   parcels.py's ``_planned_window``.
 # - "pickup_point" is NOT declared: upsAccessPoint has only ever been null.
 #
 # Revisit each only on a payload that actually carries the field — never guess
 # ahead of what's evidenced.
-CAPABILITIES = frozenset({"url", "history"})
+CAPABILITIES = frozenset({"url", "history", "delivery_window"})
 
 # If this carrier ever grows a second backend with a genuinely different
 # payload shape (a country-specific API, not just a config option), replace

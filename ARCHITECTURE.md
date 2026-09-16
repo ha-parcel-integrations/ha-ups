@@ -162,8 +162,8 @@ so the carrier-specific half is unit-testable without Home Assistant.
 - `UPSAwaitingPickupSensor` — parcels at `ParcelStatus.AT_PICKUP_POINT`.
   Count and parcels only: no `upsAccessPoint` object has ever been observed
   populated, so there is no location to expose.
-- `UPSNextDeliverySensor` — earliest `planned_from`. Permanently `None` on this
-  carrier until an ETA field is confirmed.
+- `UPSNextDeliverySensor` — earliest `planned_from`. `None` unless a tracked
+  parcel currently carries an ``sdd``/``sdst``/``sdt`` estimate.
 - `UPSDeliveredParcelsSensor`, `UPSLastUpdateSensor` (diagnostic, TIMESTAMP).
 
 ### `diagnostics.py`

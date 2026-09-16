@@ -34,6 +34,7 @@ from .payloads import (
     DELIVERED_CODE,
     _activity,
     active_sample,
+    active_sample_with_eta,
     delivered_sample,
     not_found_envelope,
     weighed_sample,
@@ -310,6 +311,7 @@ def test_capabilities_are_known_values():
 def test_capabilities_match_what_normalize_parcel_actually_returns():
     """Every declared CAPABILITIES entry must come true somewhere in a sample."""
     delivered = normalize_parcel(delivered_sample())
+    active = normalize_parcel(active_sample_with_eta())
     with_history = normalize_parcel(delivered_sample(), include_history=True)
 
     if "weight" in CAPABILITIES:
@@ -317,7 +319,8 @@ def test_capabilities_match_what_normalize_parcel_actually_returns():
     if "dimensions" in CAPABILITIES:
         assert delivered["dimensions"] is not None
     if "delivery_window" in CAPABILITIES:
-        assert delivered["planned_from"] is not None or delivered["planned_to"] is not None
+        # Never on a delivered parcel — the estimate disappears once delivered.
+        assert active["planned_from"] is not None or active["planned_to"] is not None
     if "pickup_point" in CAPABILITIES:
         assert delivered["pickup_point"] is not None
     if "url" in CAPABILITIES:
@@ -362,7 +365,33 @@ def test_normalize_active_parcel_not_delivered():
     assert parcel["status"] == ParcelStatus.OUT_FOR_DELIVERY
     assert parcel["delivered"] is False
     assert parcel["delivered_at"] is None
-    # No confirmed ETA field yet — always None until one is.
+    # No sdd/sdst/sdt on this sample — no live estimate for this parcel.
+    assert parcel["planned_from"] is None
+    assert parcel["planned_to"] is None
+
+
+def test_normalize_active_parcel_with_eta():
+    parcel = normalize_parcel(active_sample_with_eta())
+    # sdd/sdst/sdt, local to the recipient via shipToGMTOffset.
+    assert parcel["planned_from"] == "2026-09-18T15:30:00-06:00"
+    assert parcel["planned_to"] == "2026-09-18T19:30:00-06:00"
+
+
+def test_normalize_planned_window_missing_offset_falls_back_to_utc():
+    """No shipmentGMTInfo on record yet — don't crash, assume UTC."""
+    raw = active_sample_with_eta()
+    del raw["shipmentGMTInfo"]
+    parcel = normalize_parcel(raw)
+    assert parcel["planned_from"] == "2026-09-18T15:30:00+00:00"
+    assert parcel["planned_to"] == "2026-09-18T19:30:00+00:00"
+
+
+@pytest.mark.parametrize("field", ["sdd", "sdst", "sdt"])
+def test_normalize_planned_window_partial_triplet_stays_none(field):
+    """A malformed or partial triplet must never publish a wrong estimate."""
+    raw = active_sample_with_eta()
+    raw[field] = "not-a-value"
+    parcel = normalize_parcel(raw)
     assert parcel["planned_from"] is None
     assert parcel["planned_to"] is None
 

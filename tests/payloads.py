@@ -83,6 +83,32 @@ def active_sample(code: str = ACTIVE_CODE) -> dict:
     return sample
 
 
+def active_sample_with_eta(code: str = ACTIVE_CODE) -> dict:
+    """``active_sample`` plus a live delivery estimate.
+
+    ``sdd``/``sdst``/``sdt`` and ``shipmentGMTInfo``, matching what was
+    captured on issue #1 — confirmed against ups.com's own "Friday September
+    18 between 3:30 P.M. - 7:30 P.M." for the same parcel. Kept separate from
+    :func:`active_sample`: that fixture backs the polling-tier tests, and an
+    ETA fixed to a real calendar date would silently start downgrading their
+    tier once "now" passes it (``_hottest_tier_minutes`` only stays hot within
+    ``HOT_LOOKAHEAD_HOURS`` of ``planned_from``).
+    """
+    sample = active_sample(code)
+    sample.update(
+        {
+            "sdd": "20260918",
+            "sdst": "15:30:00",
+            "sdt": "19:30:00",
+            "shipmentGMTInfo": {
+                "shipFromGMTOffset": "-04:00",
+                "shipToGMTOffset": "-06:00",
+            },
+        }
+    )
+    return sample
+
+
 def weighed_sample(code: str = DELIVERED_CODE) -> dict:
     """A delivered parcel with a populated weight — never seen live yet, but
     the mapping (KGS/LBS -> kg) must still be exercised."""

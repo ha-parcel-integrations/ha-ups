@@ -7,8 +7,8 @@
 
 > 💬 Questions or feedback? Join the discussion on the [Home Assistant community](https://community.home-assistant.io/t/packages-postnl-dhl-nl-dpd-and-gls-parcel-integration/112433/).
 
-> **Not everything UPS shows is available here yet.** The ETA window, weight
-> and pickup-point fields stay empty, and `at_pickup_point` has never been seen
+> **Not everything UPS shows is available here yet.** The weight and
+> pickup-point fields stay empty, and `at_pickup_point` has never been seen
 > on a real parcel — UPS's tracking service has not sent any of them on the
 > parcels captured so far. Each one has an open issue you can help close; see
 > [Troubleshooting](#troubleshooting).
@@ -42,7 +42,7 @@ Part of the [ha-parcel-integrations](https://ha-parcel-integrations.github.io/) 
 - Track any number of UPS parcels by tracking code — no account needed
 - Per-parcel sensor with the canonical status (`registered` / `in_transit` / `out_for_delivery` / `delivered` / …), the carrier's own status text and a tracking deep-link
 - Summary sensors: incoming parcels, next delivery, recently delivered parcels
-- Read-only **Deliveries** calendar (currently stays empty — UPS has no confirmed ETA field yet; see the note at the top of this README)
+- Read-only **Deliveries** calendar, populated when UPS is currently showing a delivery estimate for a parcel
 - `ups.track_parcel` / `ups.untrack_parcel` services, so a dashboard button can add a parcel
 - Events + device triggers for no-code automations (parcel registered, status changed, delivered)
 - Opt-in per-parcel status history
@@ -170,7 +170,7 @@ The integration fires these on the event bus (also available as device triggers 
 | `ups_parcel_registered` | A new parcel appears in the active list |
 | `ups_parcel_status_changed` | A parcel's canonical status changes (`old_status` / `new_status` in the payload), except the final hop to delivered |
 | `ups_parcel_delivered` | A parcel is delivered |
-| `ups_parcel_delivery_time_changed` | The expected delivery window changes — never fires today, since UPS has no confirmed ETA field yet |
+| `ups_parcel_delivery_time_changed` | The expected delivery window changes |
 
 Every payload is the full normalised parcel plus the hub's `device_id`. Events are suppressed on the first refresh after start-up.
 
@@ -205,7 +205,7 @@ logger:
 - **A parcel shows `unknown`** — UPS has not scanned it yet (the endpoint reports the code as not found until the first scan), or the code is wrong. It will pick up automatically once scanned.
 - **A status logs "Unrecognised UPS status"** — please [open an issue](https://github.com/ha-parcel-integrations/ha-ups/issues/new?template=unrecognised_status.yml) with the logged line so the mapping can be extended. `at_pickup_point` is the one still missing entirely, so a parcel waiting in a UPS Access Point is the most likely source.
 - **A poll logs "UPS fetch failed... request timed out"** — UPS's tracking endpoint answers a well-formed request normally, but silently stops responding instead of returning an error when it doesn't like the request. A single stuck parcel is retried on the next poll and does not affect the others. If *every* parcel starts timing out at once and stays that way across several polls, it's more likely the endpoint temporarily throttling this connection than a one-off — wait it out. The integration stands down for two hours automatically, doubling up to six, and will not let anything force extra requests during that window — measured, that is how long UPS takes to start answering again.
-- **No delivery window / calendar entries** — UPS has no confirmed ETA field yet, so `planned_from`/`planned_to` are held at `None`. [Issue #1](https://github.com/ha-parcel-integrations/ha-ups/issues/1) collects the evidence needed to change that.
+- **No delivery window / calendar entry for a parcel** — UPS only sends an estimate while one exists for that parcel (it disappears once delivered), and only from ``sdd``/``sdst``/``sdt``; a parcel without a current estimate keeps `planned_from`/`planned_to` at `None`.
 
 ## Related integrations
 
