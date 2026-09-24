@@ -134,7 +134,7 @@ Standard HA removal applies: **Settings → Devices & Services → UPS → ⋮ �
 | `sensor.ups_incoming_parcels` | Number of active tracked parcels, full list under the `parcels` attribute |
 | `sensor.ups_parcel_<code>` | One per tracked parcel; state is the canonical status, attributes carry the full normalised parcel |
 | `sensor.ups_next_delivery` | Earliest expected delivery moment across all active parcels |
-| `sensor.ups_ready_for_pickup` | Parcels waiting for you at a UPS Access Point, full list under the `parcels` attribute |
+| `sensor.ups_awaiting_pickup` | Parcels waiting for you at a UPS Access Point, full list under the `parcels` attribute |
 | `sensor.ups_delivered_parcels` | Recently delivered parcels (see the retention option) |
 | `sensor.ups_last_successful_update` | Diagnostic: when UPS was last polled successfully |
 

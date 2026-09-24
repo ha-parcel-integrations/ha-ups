@@ -135,7 +135,7 @@
         "name": "Parcel {barcode}"
       },
       "awaiting_pickup": {
-        "name": "Ready for pickup",
+        "name": "Awaiting pickup",
         "unit_of_measurement": "parcels"
       }
     }
