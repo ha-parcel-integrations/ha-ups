@@ -113,14 +113,13 @@ starvation test silently passes for the wrong reason.
 
 ## Evidence tiers in the status maps — know which one you are reading
 
-- **Observed on the wire.** 14 `nameKey` values and **all 51** `actCode`
+- **Observed on real parcels.** 14 `nameKey` values and **all 51** `actCode`
   values, the latter each with the exact `activityScan` sentence it was mapped
   from. Six parcels have produced no code outside the map. Recorded in
   `carrier-research/ups/api/tracking.md`.
-- **UPS's own translation bundle.** Roughly thirty further `nameKey` entries —
-  including *every* `at_pickup_point` key. The bundle establishes what a key
-  means, not that this endpoint emits it. Its URL and extraction date are **not
-  recorded anywhere**; that is an open gap.
+- **Mapped from UPS's published status list.** Roughly thirty further
+  `nameKey` entries — including *every* `at_pickup_point` key. The list
+  establishes what a key means, not that this endpoint emits it.
 - **`dropoffAccessPoint` is read as `in_transit` on medium confidence.** It
   could be a recipient-side Access Point drop instead. `in_transit` is the safe
   way to be wrong: `at_pickup_point` would tell a user to collect a parcel that
