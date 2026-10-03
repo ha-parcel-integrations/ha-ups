@@ -9,8 +9,8 @@
 
 > **Not everything UPS shows is available here yet.** The weight and
 > pickup-point fields stay empty, and `at_pickup_point` has never been seen
-> on a real parcel — UPS's tracking service has not sent any of them on the
-> parcels captured so far. Each one has an open issue you can help close; see
+> on a real parcel — none of them has shown up on a real
+> parcel yet. Each one has an open issue you can help close; see
 > [Troubleshooting](#troubleshooting).
 
 A custom Home Assistant integration that tracks your [UPS](https://www.ups.com/track) parcels. No account is needed — you enter the tracking code yourself, just like on the UPS website.
@@ -149,7 +149,7 @@ The `status` field is the carrier-agnostic enum shared by the whole integration 
 | `registered` | Announced / received by UPS | ✅ |
 | `in_transit` | In the sorting network | ✅ |
 | `out_for_delivery` | With the courier today | ✅ |
-| `at_pickup_point` | Waiting for you at a pickup location | ⚠️ mapped from UPS's own translation bundle, not yet seen on the wire |
+| `at_pickup_point` | Waiting for you at a pickup location | ⚠️ mapped from UPS's status list, not yet seen on a real parcel |
 | `delivered` | Delivered | ✅ |
 | `returning` | Going back to the sender | ✅ |
 | `problem` | UPS reports an exception | ✅ |
@@ -158,7 +158,7 @@ The `status` field is the carrier-agnostic enum shared by the whole integration 
 The carrier's own human-readable text is always available as `raw_status`. An
 unrecognised status is reported as `unknown` and logs a one-time warning with
 a link to open an issue — that's how the ⚠️ rows above get confirmed. A ⚠️ row
-means the status key is mapped from UPS's own tracking translation bundle, so
+means the status is mapped from UPS's published status list, so
 the meaning is right, but no real parcel has yet been observed reporting it.
 
 ## Events
