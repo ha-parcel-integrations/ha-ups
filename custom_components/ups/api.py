@@ -60,6 +60,7 @@ REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=20)
 # warning, and nothing should be wired to it as though it were.
 SLOW_REQUEST_SECONDS = 8.0
 
+# suite: allow browser user-agent (Akamai scores the client hints against a Chrome identity, per the note below)
 _CHROME_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
