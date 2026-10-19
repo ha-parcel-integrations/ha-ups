@@ -109,6 +109,9 @@ def test_to_redact_covers_every_address_and_token_field():
     for field in (
         "shipToAddress",
         "deliveryAddress",
+        "consigneeAddress",
+        "shipFromAddress",
+        "specialInstructions",
         "receivedBy",
         "leftAt",
         "signatureImage",

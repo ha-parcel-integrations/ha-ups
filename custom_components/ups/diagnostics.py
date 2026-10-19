@@ -30,6 +30,9 @@ TO_REDACT = {
     # address / recipient / proof-of-delivery fields
     "shipToAddress",
     "deliveryAddress",
+    "consigneeAddress",
+    "shipFromAddress",
+    "specialInstructions",
     "receivedBy",
     "leftAt",
     "signatureImage",
