@@ -61,13 +61,21 @@ A custom Home Assistant integration that tracks your [UPS](https://www.ups.com/t
 
 1. Open HACS and search for **UPS**
 2. Install it
-3. Restart Home Assistant
+3. Restart Home Assistant if HACS asks you to
+
+Or click the button below to open it directly in HACS:
+
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ha-parcel-integrations&repository=ha-ups&category=integration)
 
 ### Manual
 
 Copy `custom_components/ups` into your `config/custom_components/` folder and restart Home Assistant.
 
 ## Configuration
+
+[![Open your Home Assistant instance and start setting up this integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=ups)
+
+Or set it up by hand:
 
 Add the integration via **Settings → Devices & Services → Add Integration → UPS**. There is nothing to fill in: the hub is created immediately (UPS tracking needs no account).
 
