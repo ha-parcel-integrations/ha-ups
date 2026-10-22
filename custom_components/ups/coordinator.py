@@ -196,6 +196,8 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
     active (not-yet-delivered) parcels, ``self.delivered`` the rest.
     """
 
+    config_entry: ConfigEntry
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -600,7 +602,9 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
             return (
                 0 if never_attempted else 1,
                 -overdue,
-                ranking.get(status, unknown_rank),
+                ranking.get(status, unknown_rank)
+                if status is not None
+                else unknown_rank,
                 last_fetch,
             )
 
@@ -935,7 +939,7 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
         # on the tracking code the request was made with, not the barcode:
         # a not-yet-scanned parcel has no barcode to key on.
         self._delivered_codes = {
-            raw.get("requestedTrackingNumber")
+            raw["requestedTrackingNumber"]
             for raw, parcel in zip(raws, normalized, strict=True)
             if parcel["delivered"] and raw.get("requestedTrackingNumber")
         } & codes

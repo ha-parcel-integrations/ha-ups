@@ -15,7 +15,7 @@ machinery and should be left alone.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, tzinfo
 import logging
 from typing import Any
 
@@ -391,7 +391,7 @@ def _delivered_at(raw: dict, delivered: bool) -> str | None:
     return newest
 
 
-def _parse_gmt_offset(offset: str | None) -> timezone | None:
+def _parse_gmt_offset(offset: str | None) -> tzinfo | None:
     """Parse a ``±HH:MM`` offset string (``shipmentGMTInfo``) to a ``timezone``."""
     if not offset:
         return None
