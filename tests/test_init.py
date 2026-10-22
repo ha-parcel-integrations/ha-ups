@@ -1,4 +1,5 @@
 """Tests for UPS setup and unload."""
+
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.config_entries import ConfigEntryState
@@ -6,14 +7,9 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ups.api import UPSApiError
-from custom_components.ups.const import (
-    CONF_PARCELS,
-    CONF_TRACKING_CODE,
-    DOMAIN,
-)
+from custom_components.ups.const import CONF_PARCELS, CONF_TRACKING_CODE, DOMAIN
 
-from .payloads import ACTIVE_CODE
-from .payloads import active_sample as _sample
+from .payloads import ACTIVE_CODE, active_sample as _sample
 
 OTHER_CODE = "EXAMPLE222222"
 
@@ -100,9 +96,7 @@ async def test_a_failed_platform_forward_closes_the_session(hass):
 
 async def test_setup_without_parcels_still_loads(hass):
     """Nothing tracked means nothing to seed — and still no HTTP."""
-    entry = MockConfigEntry(
-        domain=DOMAIN, unique_id=DOMAIN, options={CONF_PARCELS: []}
-    )
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=DOMAIN, options={CONF_PARCELS: []})
     entry.add_to_hass(hass)
 
     assert await hass.config_entries.async_setup(entry.entry_id)

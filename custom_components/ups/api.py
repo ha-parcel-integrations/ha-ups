@@ -25,9 +25,9 @@ follow-up ``fetch()``/XHR call to ``webapis.ups.com`` carry different
 ``sec-fetch-*``/``Accept``/``Origin`` shapes — a navigation never carries the
 fetch-request shape a real browser does not send on it.
 """
+
 from __future__ import annotations
 
-import asyncio
 import logging
 import ssl
 import time
@@ -292,8 +292,7 @@ class UPSApiClient:
                 # decompressed size once made a healthy page look five times
                 # bigger than it was.
                 _LOGGER.debug(
-                    "UPS bootstrap: %s bytes, Set-Cookie sent %s; jar now "
-                    "holds %s",
+                    "UPS bootstrap: %s bytes, Set-Cookie sent %s; jar now holds %s",
                     len(body),
                     ", ".join(sorted(sent)) or "(nothing)",
                     ", ".join(sorted(c.key for c in self._session.cookie_jar))
@@ -319,9 +318,7 @@ class UPSApiClient:
                     # decides whether the budget should be emptied. Public
                     # error-page markup, no credentials — but truncated
                     # anyway, because debug logs get pasted into issues.
-                    snippet = " ".join(
-                        body[:400].decode("utf-8", "replace").split()
-                    )
+                    snippet = " ".join(body[:400].decode("utf-8", "replace").split())
                     _LOGGER.warning(
                         "UPS bootstrap returned %s bytes without %s over %s. "
                         "Page starts: %s",
@@ -338,7 +335,7 @@ class UPSApiClient:
                         f"bootstrap HTTP {response.status}",
                         status_code=response.status,
                     )
-        except asyncio.TimeoutError as err:
+        except TimeoutError as err:
             # The header guard failing is the expected cause here. Never
             # mistaken for "not found".
             _LOGGER.debug(
@@ -410,7 +407,9 @@ class UPSApiClient:
                         elapsed,
                     )
                 if response.status == 401:
-                    raise UPSApiError("HTTP 401 (CSRF/session expired)", status_code=401)
+                    raise UPSApiError(
+                        "HTTP 401 (CSRF/session expired)", status_code=401
+                    )
                 if response.status != 200:
                     raise UPSApiError(
                         f"HTTP {response.status}", status_code=response.status
@@ -422,7 +421,7 @@ class UPSApiClient:
                     payload = await response.json(content_type=None)
                 except ValueError as err:
                     raise UPSApiError(f"unparseable body ({err})") from err
-        except asyncio.TimeoutError as err:
+        except TimeoutError as err:
             _LOGGER.debug(
                 "UPS track POST for %s timed out after %.2fs",
                 tracking_code,
@@ -448,8 +447,6 @@ class UPSApiClient:
         if detail.get("errorCode") == "504":
             return None
         if detail.get("errorCode"):
-            raise UPSApiError(
-                str(detail.get("errorText") or detail["errorCode"])
-            )
+            raise UPSApiError(str(detail.get("errorText") or detail["errorCode"]))
 
         return detail

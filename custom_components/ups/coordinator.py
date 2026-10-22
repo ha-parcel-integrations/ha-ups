@@ -4,14 +4,15 @@ Fetching and event firing only — the parcel mapping lives in :mod:`.parcels`.
 That split is what lets the account-based variant swap this file out without
 duplicating the mapping code.
 """
+
 from __future__ import annotations
 
+from collections import deque
+from datetime import UTC, datetime, timedelta
 import hashlib
 import logging
 import random
 import time
-from collections import deque
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import aiohttp
@@ -152,8 +153,7 @@ def _hottest_tier_minutes(active_parcels: list[dict], now: datetime) -> int | No
             return HOT_INTERVAL_MINUTES
 
     if all(
-        parcel["status"] == ParcelStatus.AT_PICKUP_POINT
-        for parcel in active_parcels
+        parcel["status"] == ParcelStatus.AT_PICKUP_POINT for parcel in active_parcels
     ):
         return COLD_INTERVAL_MINUTES
 
@@ -292,9 +292,9 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
         # that already existed when the integration started — otherwise every
         # restart would flood users with "registered" notifications.
         self._known_state: dict[str, ParcelStatus] | None = None
-        self._known_delivery_times: (
-            dict[str, tuple[str | None, str | None]] | None
-        ) = None
+        self._known_delivery_times: dict[str, tuple[str | None, str | None]] | None = (
+            None
+        )
         # Cached device id, attached to every fired event so device-trigger
         # automations can filter to this device.
         self._cached_device_id: str | None = None
@@ -303,9 +303,7 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
         # Rolling record of individual fetch outcomes for diagnostics. Holds
         # no tracking codes — a duration and an outcome is all a throttle
         # report needs, and diagnostics get pasted into public issues.
-        self._recent_fetches: deque[dict[str, Any]] = deque(
-            maxlen=RECENT_FETCH_HISTORY
-        )
+        self._recent_fetches: deque[dict[str, Any]] = deque(maxlen=RECENT_FETCH_HISTORY)
 
     @property
     def current_tier_minutes(self) -> int | None:
@@ -512,9 +510,7 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
     def _include_history(self) -> bool:
         """Whether the opt-in per-parcel history option is enabled."""
         return bool(
-            self.config_entry.options.get(
-                CONF_INCLUDE_HISTORY, DEFAULT_INCLUDE_HISTORY
-            )
+            self.config_entry.options.get(CONF_INCLUDE_HISTORY, DEFAULT_INCLUDE_HISTORY)
         )
 
     def _budget_holds(self) -> bool:
@@ -736,17 +732,12 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
         errors = 0
         retry_afters: list[float] = []
         saw_429 = False
-        for code, result in zip(codes_to_fetch, results):
+        for code, result in zip(codes_to_fetch, results, strict=True):
             if isinstance(result, BaseException):
-                if not isinstance(
-                    result, (UPSApiError, aiohttp.ClientError)
-                ):
+                if not isinstance(result, (UPSApiError, aiohttp.ClientError)):
                     raise result
                 errors += 1
-                if (
-                    isinstance(result, UPSApiError)
-                    and result.status_code == 429
-                ):
+                if isinstance(result, UPSApiError) and result.status_code == 429:
                     saw_429 = True
                     if result.retry_after is not None:
                         retry_afters.append(result.retry_after)
@@ -783,11 +774,11 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
         # after it, so a first fetch that failed with an empty cache raised
         # and published nothing at all — three codes added, three sensors
         # expected, and the user saw nothing.
-        for code in codes:
-            if code not in covered:
-                raws.append(
-                    self._raw_cache.get(code) or {"requestedTrackingNumber": code}
-                )
+        raws.extend(
+            self._raw_cache.get(code) or {"requestedTrackingNumber": code}
+            for code in codes
+            if code not in covered
+        )
 
         # A 429, or a cycle whose fetch failed, both mean the same thing: stop
         # asking for a while. The second case is the one that actually occurs
@@ -863,7 +854,7 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
         # code was skipped as already-delivered talked to nobody, so it keeps
         # the previous stamp rather than presenting itself as fresh.
         if not codes or (codes_to_fetch and errors < len(codes_to_fetch)):
-            self.last_success_time = datetime.now(timezone.utc)
+            self.last_success_time = datetime.now(UTC)
 
         self._persist_cache()
 
@@ -872,9 +863,7 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
             # The tier no longer sets the cadence — the budget does — but it
             # still answers the one question the budget cannot: whether there
             # is anything worth asking about at all.
-            self._current_tier_minutes = _hottest_tier_minutes(
-                normalized_active, now
-            )
+            self._current_tier_minutes = _hottest_tier_minutes(normalized_active, now)
             wait_seconds = (
                 None
                 if not self._fetch_queue(self._tracked())
@@ -920,7 +909,7 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
             message = message.replace(code, "<code>")
         self._recent_fetches.append(
             {
-                "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "at": datetime.now(UTC).isoformat(timespec="seconds"),
                 "seconds": round(seconds, 2),
                 "ok": error is None,
                 "error": message,
@@ -947,12 +936,12 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
         # a not-yet-scanned parcel has no barcode to key on.
         self._delivered_codes = {
             raw.get("requestedTrackingNumber")
-            for raw, parcel in zip(raws, normalized)
+            for raw, parcel in zip(raws, normalized, strict=True)
             if parcel["delivered"] and raw.get("requestedTrackingNumber")
         } & codes
         self._status_by_code = {
             raw["requestedTrackingNumber"]: parcel["status"]
-            for raw, parcel in zip(raws, normalized)
+            for raw, parcel in zip(raws, normalized, strict=True)
             if raw.get("requestedTrackingNumber") in codes
         }
 

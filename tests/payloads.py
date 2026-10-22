@@ -1,4 +1,5 @@
 """Sample UPS ``trackDetails[]`` entries shared by the test modules."""
+
 from __future__ import annotations
 
 ACTIVE_CODE = "1Z999AA10123456784"

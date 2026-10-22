@@ -1,8 +1,9 @@
 """UPS parcel tracker custom component for Home Assistant."""
+
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
+import logging
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
@@ -68,7 +69,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: UPSConfigEntry) -> bool:
         await session.close()
         raise
 
-    entry.runtime_data = UPSData(client=client, coordinator=coordinator, session=session)
+    entry.runtime_data = UPSData(
+        client=client, coordinator=coordinator, session=session
+    )
 
     try:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -92,18 +95,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: UPSConfigEntry) -> bool:
     return True
 
 
-async def _async_options_updated(
-    hass: HomeAssistant, entry: UPSConfigEntry
-) -> None:
+async def _async_options_updated(hass: HomeAssistant, entry: UPSConfigEntry) -> None:
     """Apply changed options by refreshing the coordinator."""
     await entry.runtime_data.coordinator.async_request_refresh()
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: UPSConfigEntry) -> None:
     """Delete the persisted payload cache when the entry is removed."""
-    await Store(
-        hass, STORAGE_VERSION, f"{STORAGE_KEY}.{entry.entry_id}"
-    ).async_remove()
+    await Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}.{entry.entry_id}").async_remove()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: UPSConfigEntry) -> bool:

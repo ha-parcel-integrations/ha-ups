@@ -1,4 +1,5 @@
 """Calendar platform for the UPS parcel tracker integration."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -18,7 +19,6 @@ from .parcels import parse_iso
 PARALLEL_UPDATES = 0
 
 _DEFAULT_EVENT_DURATION = timedelta(hours=1)
-
 
 
 async def async_setup_entry(

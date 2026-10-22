@@ -1,15 +1,13 @@
 """Tests for the UPS API client."""
+
 import asyncio
 from http.cookies import Morsel
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.ups.api import (
-    GUARD_HEADERS,
-    UPSApiClient,
-    UPSApiError,
-)
+from custom_components.ups.api import GUARD_HEADERS, UPSApiClient, UPSApiError
+from custom_components.ups.const import BOOTSTRAP_URL, TRACKING_API_URL
 
 CODE = "1Z999AA10123456784"
 
@@ -125,7 +123,12 @@ async def test_all_four_guard_headers_are_sent():
 
     await client.async_get_parcel(CODE)
 
-    for header in ("Accept-Encoding", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform"):
+    for header in (
+        "Accept-Encoding",
+        "sec-ch-ua",
+        "sec-ch-ua-mobile",
+        "sec-ch-ua-platform",
+    ):
         assert header in GUARD_HEADERS
         assert session.post.call_args.kwargs["headers"][header] == GUARD_HEADERS[header]
         assert session.get.call_args.kwargs["headers"][header] == GUARD_HEADERS[header]
@@ -373,7 +376,9 @@ async def test_a_refusal_names_the_handshake_it_came_back_over(caplog):
     ssl_object.cipher = MagicMock(return_value=("TLS_AES_256_GCM_SHA384", "", 256))
     response.connection = MagicMock()
     response.connection.transport.get_extra_info = MagicMock(
-        side_effect=lambda name: ssl_object if name == "ssl_object" else ("23.1.2.3", 443)
+        side_effect=lambda name: (
+            ssl_object if name == "ssl_object" else ("23.1.2.3", 443)
+        )
     )
     session = _session(cookies=[], get_response=response)
     client = UPSApiClient(session)
@@ -395,8 +400,6 @@ def test_the_bootstrap_does_not_use_the_public_track_page():
     only the page is refusing. Pointing this back at www.ups.com reinstates
     the outage.
     """
-    from custom_components.ups.const import BOOTSTRAP_URL, TRACKING_API_URL
-
     assert BOOTSTRAP_URL.startswith("https://webapis.ups.com/")
     assert "www.ups.com" not in BOOTSTRAP_URL
     # Same host as the POST, so the cookie is seeded by what will consume it.

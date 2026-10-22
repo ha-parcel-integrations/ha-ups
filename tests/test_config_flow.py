@@ -1,5 +1,8 @@
 """Tests for the UPS config and options flow."""
 
+import json
+from pathlib import Path
+
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ups.config_flow import (
@@ -54,12 +57,7 @@ async def test_user_flow_creates_hub_on_confirm(hass):
 
 def test_setup_description_warns_about_pacing():
     """A user who is not warned up front reports the pacing as a bug."""
-    import json
-    from pathlib import Path
-
-    strings = json.loads(
-        Path("custom_components/ups/strings.json").read_text()
-    )
+    strings = json.loads(Path("custom_components/ups/strings.json").read_text())
     description = strings["config"]["step"]["user"]["description"]
     assert "What to expect" in description
     for translation in ("en", "nl"):

@@ -4,8 +4,9 @@ Pure-function tests for the tiering/scheduling helpers, plus a few
 integration checks that ``_async_update_data`` actually wires them up (the
 full-stop condition, its resume, and the 429 backoff).
 """
+
+from datetime import UTC, datetime, timedelta
 import time
-from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -38,8 +39,6 @@ from custom_components.ups.coordinator import (
 from .payloads import ACTIVE_CODE, DELIVERED_CODE, active_sample, delivered_sample
 
 OTHER_CODE = "1Z888888888888888"
-
-UTC = timezone.utc
 
 
 def _fake_client(**kwargs) -> AsyncMock:
@@ -136,9 +135,7 @@ def test_no_wait_at_all_fully_suspends():
 def test_daytime_candidate_outside_window_is_wait_plus_stagger_and_jitter():
     now = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
     interval = _next_update_interval(now, _WAIT, "entry-1")
-    floor = timedelta(seconds=_WAIT) + timedelta(
-        minutes=_stagger_minutes("entry-1")
-    )
+    floor = timedelta(seconds=_WAIT) + timedelta(minutes=_stagger_minutes("entry-1"))
     # Jitter is additive only: never sooner than the budget allows.
     assert floor <= interval <= floor + timedelta(seconds=_WAIT * JITTER_FRACTION)
 
@@ -165,8 +162,9 @@ def test_polling_continues_through_the_night():
     for hour in (0, 3, 5, 23):
         now = datetime(2026, 1, 1, hour, 0, tzinfo=UTC)
         interval = _next_update_interval(now, _WAIT, "entry-1")
-        assert interval <= timedelta(seconds=_WAIT * (1 + JITTER_FRACTION)) + \
-            timedelta(minutes=_stagger_minutes("entry-1"))
+        assert interval <= timedelta(seconds=_WAIT * (1 + JITTER_FRACTION)) + timedelta(
+            minutes=_stagger_minutes("entry-1")
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -207,7 +205,8 @@ async def test_update_interval_resumes_once_a_parcel_is_added(hass):
     assert coordinator.update_interval is None
 
     hass.config_entries.async_update_entry(
-        entry, options={**entry.options, CONF_PARCELS: [{CONF_TRACKING_CODE: ACTIVE_CODE}]}
+        entry,
+        options={**entry.options, CONF_PARCELS: [{CONF_TRACKING_CODE: ACTIVE_CODE}]},
     )
     client.async_get_parcel.return_value = active_sample()
     await coordinator._async_update_data()
@@ -306,9 +305,7 @@ async def test_a_run_of_hangs_backs_off_even_though_no_429_is_sent(hass):
     await coordinator._async_update_data()
 
     assert coordinator._consecutive_failures == 1
-    assert coordinator.update_interval == timedelta(
-        seconds=BACKOFF_BASE_SECONDS * 2
-    )
+    assert coordinator.update_interval == timedelta(seconds=BACKOFF_BASE_SECONDS * 2)
     # Crucially, slower than every normal tier — not left on the tier cadence,
     # which would keep hammering an endpoint that has stopped answering.
     assert coordinator.update_interval > timedelta(minutes=MID_INTERVAL_MINUTES)
@@ -346,9 +343,7 @@ async def test_all_fetches_failing_serves_cache_and_still_backs_off(hass):
     data = await coordinator._async_update_data()
 
     assert data  # cached parcel still published
-    assert coordinator.update_interval == timedelta(
-        seconds=BACKOFF_BASE_SECONDS * 2
-    )
+    assert coordinator.update_interval == timedelta(seconds=BACKOFF_BASE_SECONDS * 2)
 
 
 # ---------------------------------------------------------------------------
@@ -420,7 +415,9 @@ async def test_the_budget_refills_with_time(hass, real_budget):
     assert client.async_get_parcel.call_count == spent + 1
 
 
-async def test_a_hang_empties_the_budget_even_if_it_looked_affordable(hass, real_budget):
+async def test_a_hang_empties_the_budget_even_if_it_looked_affordable(
+    hass, real_budget
+):
     """The accounting said there was room and there was not — trust the wire."""
     entry = _entry_with([{CONF_TRACKING_CODE: ACTIVE_CODE}])
     entry.add_to_hass(hass)
@@ -608,20 +605,18 @@ async def test_a_hotter_parcel_cannot_starve_a_colder_one(hass, real_budget):
     three of the address's requests in twenty-two minutes, while five on
     unknown — none of which had ever returned a payload — waited behind it."""
     codes = [f"1Z{n}" for n in range(5)]
-    entry = _entry_with(
-        [{CONF_TRACKING_CODE: code} for code in [*codes, ACTIVE_CODE]]
-    )
+    entry = _entry_with([{CONF_TRACKING_CODE: code} for code in [*codes, ACTIVE_CODE]])
     entry.add_to_hass(hass)
     coordinator = UPSCoordinator(hass, _fake_client(), entry)
     now = time.time()
     coordinator._attempted_codes = {*codes, ACTIVE_CODE}
     coordinator._status_by_code = {
-        **{code: ParcelStatus.UNKNOWN for code in codes},
+        **dict.fromkeys(codes, ParcelStatus.UNKNOWN),
         ACTIVE_CODE: ParcelStatus.IN_TRANSIT,
     }
     # The hot one was just served; the cold ones have waited a working day.
     coordinator._last_fetch_by_code = {
-        **{code: now - 8 * 3600 for code in codes},
+        **dict.fromkeys(codes, now - 8 * 3600),
         ACTIVE_CODE: now - 60,
     }
 
@@ -642,14 +637,12 @@ async def test_a_rotation_longer_than_the_band_cannot_lock_a_code_out(
     """
     movers = [f"1Z{n}" for n in range(3)]
     starved = ACTIVE_CODE
-    entry = _entry_with(
-        [{CONF_TRACKING_CODE: code} for code in [*movers, starved]]
-    )
+    entry = _entry_with([{CONF_TRACKING_CODE: code} for code in [*movers, starved]])
     entry.add_to_hass(hass)
     coordinator = UPSCoordinator(hass, _fake_client(), entry)
     coordinator._attempted_codes = {*movers, starved}
     coordinator._status_by_code = {
-        **{code: ParcelStatus.IN_TRANSIT for code in movers},
+        **dict.fromkeys(movers, ParcelStatus.IN_TRANSIT),
         # Never returned a payload, so it has no status of its own.
         starved: ParcelStatus.UNKNOWN,
     }
@@ -769,9 +762,7 @@ async def test_a_failed_new_code_is_not_retried_straight_away(hass, real_budget)
     client.async_get_parcel.assert_not_called()
 
 
-async def test_seeding_from_cache_does_not_cut_a_standdown_short(
-    hass, real_budget
-):
+async def test_seeding_from_cache_does_not_cut_a_standdown_short(hass, real_budget):
     """Observed live: a restart cut a 2 h stand-down to 68 minutes.
 
     ``seed_from_cache`` computed its own interval from the budget alone, so
@@ -793,9 +784,7 @@ async def test_seeding_from_cache_does_not_cut_a_standdown_short(
     assert coordinator.update_interval >= standdown - timedelta(seconds=60)
 
 
-async def test_a_refresh_during_a_standdown_does_not_postpone_it(
-    hass, real_budget
-):
+async def test_a_refresh_during_a_standdown_does_not_postpone_it(hass, real_budget):
     """Observed live: adding two parcels moved the next poll 33 min later.
 
     The stand-down used to be a duration recomputed from ``now`` every
@@ -861,9 +850,7 @@ async def test_a_failed_attempt_survives_a_restart(hass, real_budget):
     # And the backoff carries over rather than resetting to the normal cadence.
     # The stand-down runs to a deadline, so it counts down rather than up:
     # near its full length, never over it.
-    assert restarted.update_interval > timedelta(
-        seconds=BACKOFF_BASE_SECONDS * 2 - 60
-    )
+    assert restarted.update_interval > timedelta(seconds=BACKOFF_BASE_SECONDS * 2 - 60)
 
 
 async def test_fetch_durations_are_recorded_for_diagnostics(hass):
@@ -982,9 +969,10 @@ async def test_three_codes_pasted_at_once_are_not_polled_at_once(hass):
     codes = [ACTIVE_CODE, OTHER_CODE, DELIVERED_CODE]
     hass.config_entries.async_update_entry(
         entry,
-        options={**entry.options, CONF_PARCELS: [
-            {CONF_TRACKING_CODE: c} for c in codes
-        ]},
+        options={
+            **entry.options,
+            CONF_PARCELS: [{CONF_TRACKING_CODE: c} for c in codes],
+        },
     )
     data = await coordinator._async_update_data()
 
@@ -1006,9 +994,10 @@ async def test_a_bulk_add_drains_the_budget_no_faster_than_it_allows(hass, real_
     codes = [ACTIVE_CODE, OTHER_CODE, DELIVERED_CODE, "1Z777777777777777"]
     hass.config_entries.async_update_entry(
         entry,
-        options={**entry.options, CONF_PARCELS: [
-            {CONF_TRACKING_CODE: c} for c in codes
-        ]},
+        options={
+            **entry.options,
+            CONF_PARCELS: [{CONF_TRACKING_CODE: c} for c in codes],
+        },
     )
     for _ in range(len(codes)):
         await coordinator._async_update_data()

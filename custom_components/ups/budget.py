@@ -9,10 +9,11 @@ Wall clock rather than monotonic, so the balance survives a restart. A budget
 that resets on boot protects against nothing: restarting a few times while
 configuring is exactly the burst this carrier closes on.
 """
+
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
+import time
 from typing import Any
 
 
@@ -65,21 +66,20 @@ class RequestBudget:
         if self.available(now) < 1:
             return False
         self.tokens -= 1
-        if self.updated_utc < now:
-            # Restart the refill clock at this request, not at the moment the
-            # token happened to be earned. The measured beat is the gap
-            # between two *answered* requests, so a banked token spent late —
-            # or three spent minutes apart out of a full bucket — would
-            # otherwise put the next request less than a beat after the last
-            # one. Three codes added at once drain the bucket in ten minutes
-            # and the fourth request would fall 65 minutes after the third,
-            # inside the hour that costs a hang plus a two-hour stand-down.
-            #
-            # It costs a little throughput: each cycle's gap becomes a refill
-            # plus that cycle's stagger and jitter rather than a flat refill.
-            # That is the same arithmetic that put the interval past the beat
-            # instead of on it.
-            self.updated_utc = now
+        # Restart the refill clock at this request, not at the moment the
+        # token happened to be earned. The measured beat is the gap
+        # between two *answered* requests, so a banked token spent late —
+        # or three spent minutes apart out of a full bucket — would
+        # otherwise put the next request less than a beat after the last
+        # one. Three codes added at once drain the bucket in ten minutes
+        # and the fourth request would fall 65 minutes after the third,
+        # inside the hour that costs a hang plus a two-hour stand-down.
+        #
+        # It costs a little throughput: each cycle's gap becomes a refill
+        # plus that cycle's stagger and jitter rather than a flat refill.
+        # That is the same arithmetic that put the interval past the beat
+        # instead of on it.
+        self.updated_utc = max(self.updated_utc, now)
         return True
 
     def exhaust(self, now: float | None = None) -> None:

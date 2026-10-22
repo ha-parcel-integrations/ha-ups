@@ -12,10 +12,11 @@ else — the timestamp parsing, the history builder, the sort contract, the
 delivered filter, the one-shot warning for unmapped statuses — is suite-wide
 machinery and should be left alone.
 """
+
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta, timezone
 import logging
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -351,7 +352,7 @@ def _gmt_timestamp(entry: dict) -> str | None:
         parsed = datetime.strptime(f"{gmt_date} {gmt_time}", "%Y%m%d %H:%M:%S")
     except ValueError:
         return None
-    return parsed.replace(tzinfo=timezone.utc).isoformat()
+    return parsed.replace(tzinfo=UTC).isoformat()
 
 
 def _delivered_at(raw: dict, delivered: bool) -> str | None:
@@ -420,7 +421,7 @@ def _planned_window(raw: dict) -> tuple[str | None, str | None]:
 
     gmt_info = raw.get("shipmentGMTInfo")
     offset = gmt_info.get("shipToGMTOffset") if isinstance(gmt_info, dict) else None
-    tzinfo = _parse_gmt_offset(offset) or timezone.utc
+    tzinfo = _parse_gmt_offset(offset) or UTC
 
     try:
         date = datetime.strptime(sdd, "%Y%m%d").date()
@@ -469,11 +470,11 @@ def parse_iso(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(str(value))
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed
 
 
@@ -489,7 +490,7 @@ def to_iso_timestamp(value: Any) -> str | None:
         return None
     if isinstance(value, (int, float)):
         try:
-            return datetime.fromtimestamp(value / 1000, tz=timezone.utc).isoformat()
+            return datetime.fromtimestamp(value / 1000, tz=UTC).isoformat()
         except (OverflowError, OSError, ValueError):
             return None
     return str(value)
@@ -568,11 +569,14 @@ def build_history(
     return ordered[-max_events:]
 
 
-def tracking_url(tracking_code: str | None, *, locale: str = DEFAULT_LOCALE) -> str | None:
+def tracking_url(
+    tracking_code: str | None, *, locale: str = DEFAULT_LOCALE
+) -> str | None:
     """Construct the consumer tracking deep-link for a parcel."""
     if not tracking_code:
         return None
     return TRACKING_URL.format(locale=locale, tracking_code=tracking_code)
+
 
 # UPS answers with ~126 top-level fields, most of them the track page's own
 # furniture: MyChoice upsell links, CMS keys, show/disable flags, notification
@@ -746,14 +750,12 @@ def apply_delivered_filter(parcels: list[dict], entry: ConfigEntry) -> list[dict
     shows.
     """
     options = entry.options
-    filter_type = options.get(
-        CONF_DELIVERED_FILTER_TYPE, DEFAULT_DELIVERED_FILTER_TYPE
-    )
+    filter_type = options.get(CONF_DELIVERED_FILTER_TYPE, DEFAULT_DELIVERED_FILTER_TYPE)
     amount = int(
         options.get(CONF_DELIVERED_FILTER_AMOUNT, DEFAULT_DELIVERED_FILTER_AMOUNT)
     )
     if filter_type == "days":
-        cutoff = datetime.now(timezone.utc) - timedelta(days=amount)
+        cutoff = datetime.now(UTC) - timedelta(days=amount)
         return [
             parcel
             for parcel in parcels

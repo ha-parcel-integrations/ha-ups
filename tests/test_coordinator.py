@@ -2,9 +2,11 @@
 
 The parcel mapping itself is covered by ``test_parcels.py``.
 """
+
 import asyncio
 from unittest.mock import AsyncMock
 
+from homeassistant.helpers import device_registry as dr
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -268,10 +270,12 @@ async def test_a_delivered_parcel_stays_visible_while_it_is_skipped(hass):
 
 
 async def test_only_the_delivered_code_is_skipped_not_the_active_one(hass):
-    entry = _entry_with([
-        {CONF_TRACKING_CODE: DELIVERED_CODE},
-        {CONF_TRACKING_CODE: ACTIVE_CODE},
-    ])
+    entry = _entry_with(
+        [
+            {CONF_TRACKING_CODE: DELIVERED_CODE},
+            {CONF_TRACKING_CODE: ACTIVE_CODE},
+        ]
+    )
     entry.add_to_hass(hass)
     client = _fake_client()
     client.async_get_parcel.side_effect = lambda code, **kw: (
@@ -283,9 +287,7 @@ async def test_only_the_delivered_code_is_skipped_not_the_active_one(hass):
     client.async_get_parcel.reset_mock()
     data = await coordinator._async_update_data()
 
-    assert [c.args[0] for c in client.async_get_parcel.call_args_list] == [
-        ACTIVE_CODE
-    ]
+    assert [c.args[0] for c in client.async_get_parcel.call_args_list] == [ACTIVE_CODE]
     assert len(data) == 1  # the active parcel is still published
     assert len(coordinator.delivered) == 1  # and so is the delivered one
 
@@ -298,7 +300,9 @@ async def test_untracking_a_delivered_code_clears_it_from_the_skip_set(hass):
     coordinator = UPSCoordinator(hass, client, entry)
     await coordinator._async_update_data()
 
-    hass.config_entries.async_update_entry(entry, options={**entry.options, CONF_PARCELS: []})
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, CONF_PARCELS: []}
+    )
     await coordinator._async_update_data()
     hass.config_entries.async_update_entry(
         entry,
@@ -356,8 +360,6 @@ async def test_first_refresh_fires_nothing(hass):
 
 
 async def test_event_carries_device_id(hass):
-    from homeassistant.helpers import device_registry as dr
-
     entry = _entry_with([{CONF_TRACKING_CODE: ACTIVE_CODE}])
     entry.add_to_hass(hass)
     device = dr.async_get(hass).async_get_or_create(
@@ -368,9 +370,7 @@ async def test_event_carries_device_id(hass):
     coordinator = UPSCoordinator(hass, client, entry)
 
     events = []
-    hass.bus.async_listen(
-        f"{DOMAIN}_parcel_status_changed", lambda e: events.append(e)
-    )
+    hass.bus.async_listen(f"{DOMAIN}_parcel_status_changed", lambda e: events.append(e))
 
     client.async_get_parcel.return_value = _in_transit()
     await coordinator._async_update_data()
@@ -388,9 +388,7 @@ async def test_fires_status_changed_event(hass):
     coordinator = UPSCoordinator(hass, client, entry)
 
     events = []
-    hass.bus.async_listen(
-        f"{DOMAIN}_parcel_status_changed", lambda e: events.append(e)
-    )
+    hass.bus.async_listen(f"{DOMAIN}_parcel_status_changed", lambda e: events.append(e))
 
     client.async_get_parcel.return_value = _in_transit()
     await coordinator._async_update_data()  # first refresh: suppressed

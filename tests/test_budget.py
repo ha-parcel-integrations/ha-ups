@@ -153,7 +153,9 @@ def test_a_drained_bucket_rests_a_full_refill_from_the_last_request():
     barely an hour after the third — inside the window that hangs, and the
     hang costs a two-hour stand-down on top.
     """
-    budget = RequestBudget(capacity=3, refill_seconds=4500, tokens=3.0, updated_utc=1000.0)
+    budget = RequestBudget(
+        capacity=3, refill_seconds=4500, tokens=3.0, updated_utc=1000.0
+    )
 
     assert budget.try_spend(now=1000.0)
     assert budget.try_spend(now=1300.0)
