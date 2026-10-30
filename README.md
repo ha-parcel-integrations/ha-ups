@@ -144,6 +144,7 @@ Standard HA removal applies: **Settings → Devices & Services → UPS → ⋮ �
 | `sensor.ups_next_delivery` | Earliest expected delivery moment across all active parcels |
 | `sensor.ups_awaiting_pickup` | Parcels waiting for you at a UPS Access Point, full list under the `parcels` attribute |
 | `sensor.ups_delivered_parcels` | Recently delivered parcels (see the retention option) |
+| `calendar.ups_deliveries` | Read-only calendar of expected deliveries, no extra API calls |
 | `sensor.ups_last_successful_update` | Diagnostic: when UPS was last polled successfully |
 
 A delivered parcel moves from its per-parcel sensor to the delivered sensor automatically.
