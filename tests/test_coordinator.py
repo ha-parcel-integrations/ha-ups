@@ -516,3 +516,38 @@ async def test_delivery_time_changed_fires_when_an_estimate_appears(hass):
     assert events[0].data["new_planned_to"] == "2026-09-18T19:30:00-06:00"
     assert events[0].data["old_planned_from"] is None
     assert events[0].data["old_planned_to"] is None
+
+
+async def test_a_parcel_the_delivered_list_leaves_out_still_fires_delivered(hass):
+    """The retention option limits the delivered sensor, never the events."""
+    first, second = ACTIVE_CODE, "SECOND000001"
+    entry = _entry_with([{CONF_TRACKING_CODE: first}, {CONF_TRACKING_CODE: second}])
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, CONF_DELIVERED_FILTER_AMOUNT: 1}
+    )
+    client = _fake_client()
+    coordinator = UPSCoordinator(hass, client, entry)
+
+    delivered = []
+    hass.bus.async_listen(f"{DOMAIN}_parcel_delivered", lambda e: delivered.append(e))
+
+    client.async_get_parcel.side_effect = lambda code, **kwargs: active_sample(code)
+    for _ in range(2):
+        await coordinator._async_update_data()
+        coordinator._budget.tokens = coordinator._budget.capacity
+
+    def _delivered(code, **kwargs):
+        sample = delivered_sample(code)
+        if code == second:
+            sample["shipmentProgressActivities"][0]["gmtDate"] = "20260101"
+        return sample
+
+    client.async_get_parcel.side_effect = _delivered
+    for _ in range(2):
+        await coordinator._async_update_data()
+        coordinator._budget.tokens = coordinator._budget.capacity
+    await hass.async_block_till_done()
+
+    assert sorted(e.data["barcode"] for e in delivered) == sorted([first, second])
+    assert len(coordinator.delivered) == 1
