@@ -51,7 +51,7 @@ A custom Home Assistant integration that tracks your [UPS](https://www.ups.com/t
 
 ## Requirements
 
-- Home Assistant 2024.12 or newer
+- Home Assistant 2025.12 or newer
 - A UPS parcel and its tracking code (from the shipping
   confirmation email or the missed-delivery card) — no account needed
 
