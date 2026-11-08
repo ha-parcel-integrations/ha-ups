@@ -222,6 +222,13 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
         # a restart, and the nameKey vocabulary we map on is locale-independent
         # anyway (see _resolve_locale).
         self._locale = _resolve_locale(hass)
+        # Same lifetime as the locale. UPS sends shipToGMTOffset "+00:00" when
+        # it does not know the recipient's offset, so a delivery window for a
+        # parcel to this install's own country is read in this install's zone
+        # instead (see parcels._planned_window). get_default_time_zone() is
+        # the ZoneInfo HA already loaded, so this does no I/O.
+        self._home_country = (hass.config.country or "").upper() or None
+        self._home_time_zone = dt_util.get_default_time_zone()
         self.delivered: list[dict] = []
         # tracking_code -> last successful raw payload, so a transient fetch
         # failure or a not-found blip keeps the parcel visible instead of
@@ -929,7 +936,13 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
         codes = set(self._tracked())
         include_history = self._include_history
         normalized = [
-            normalize_parcel(raw, include_history=include_history, locale=self._locale)
+            normalize_parcel(
+                raw,
+                include_history=include_history,
+                locale=self._locale,
+                home_country=self._home_country,
+                home_time_zone=self._home_time_zone,
+            )
             for raw in raws
         ]
         active = [parcel for parcel in normalized if not parcel["delivered"]]

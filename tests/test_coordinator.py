@@ -27,6 +27,7 @@ from .payloads import (
     active_sample,
     active_sample_with_eta,
     delivered_sample,
+    nl_sample_with_eta,
 )
 
 OTHER_CODE = "1Z888888888888888"
@@ -551,3 +552,20 @@ async def test_a_parcel_the_delivered_list_leaves_out_still_fires_delivered(hass
 
     assert sorted(e.data["barcode"] for e in delivered) == sorted([first, second])
     assert len(coordinator.delivered) == 1
+
+
+async def test_planned_window_uses_the_home_country_and_time_zone(hass):
+    """The coordinator hands HA's country and zone to normalize_parcel, so a
+    "+00:00" window for a parcel to this install's country is read locally."""
+    hass.config.country = "NL"
+    await hass.config.async_set_time_zone("Europe/Amsterdam")
+    entry = _entry_with([{CONF_TRACKING_CODE: ACTIVE_CODE}])
+    entry.add_to_hass(hass)
+    client = _fake_client()
+    client.async_get_parcel.return_value = nl_sample_with_eta()
+    coordinator = UPSCoordinator(hass, client, entry)
+
+    parcels = await coordinator._async_update_data()
+
+    assert parcels[0]["planned_from"] == "2026-11-09T11:00:00+01:00"
+    assert parcels[0]["planned_to"] == "2026-11-09T14:00:00+01:00"

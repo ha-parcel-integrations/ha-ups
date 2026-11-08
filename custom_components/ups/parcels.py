@@ -405,15 +405,39 @@ def _parse_gmt_offset(offset: str | None) -> tzinfo | None:
         return None
 
 
-def _planned_window(raw: dict) -> tuple[str | None, str | None]:
+def _ship_to_country(raw: dict) -> str | None:
+    """``shipToAddress.country`` upper-cased, or ``None`` when absent."""
+    address = raw.get("shipToAddress")
+    country = address.get("country") if isinstance(address, dict) else None
+    return country.upper() if isinstance(country, str) and country else None
+
+
+def _planned_window(
+    raw: dict,
+    *,
+    home_country: str | None = None,
+    home_time_zone: tzinfo | None = None,
+) -> tuple[str | None, str | None]:
     """Build ``planned_from``/``planned_to`` from ``sdd``/``sdst``/``sdt``.
 
     Confirmed live 2026-09-16 (issue #1): ``sdd`` (``YYYYMMDD``), ``sdst`` and
     ``sdt`` (both ``HH:MM:SS``) carried "Friday September 18 between 3:30
     P.M. - 7:30 P.M.", matching what ups.com showed for the same parcel. The
-    triplet is local to the recipient, not UTC — ``shipmentGMTInfo``'s
-    ``shipToGMTOffset`` is the only offset in the payload that matches
+    triplet is local to the recipient, not UTC. ``shipmentGMTInfo``'s
+    ``shipToGMTOffset`` is the offset to read it in when UPS knows it
     (``-06:00`` against a Saskatchewan address, which never observes DST).
+
+    ``+00:00`` is not a measurement, though: two parcels to a Dutch address
+    (2026-11, one from outside the EU, one from inside) both carried
+    ``shipToGMTOffset: "+00:00"`` while their ``shipFromGMTOffset`` was
+    right, and ups.com showed the first one's ``11:00``-``14:00`` window in
+    Dutch local time (+01:00). So when the offset is ``+00:00`` or missing
+    and ``shipToAddress.country`` is the Home Assistant install's own
+    country, the window is read in HA's time zone instead, combined with the
+    delivery date so DST is the one in force on that date, not today. A
+    non-zero offset, or a parcel to another country, keeps the offset (or
+    UTC) as before.
+
     ``scheduledDeliveryDateDetail`` (month/day only, no year or time) and
     ``deliveryAttemptMsgDate`` remain unconfirmed and are not read here.
     """
@@ -425,7 +449,15 @@ def _planned_window(raw: dict) -> tuple[str | None, str | None]:
 
     gmt_info = raw.get("shipmentGMTInfo")
     offset = gmt_info.get("shipToGMTOffset") if isinstance(gmt_info, dict) else None
-    tzinfo = _parse_gmt_offset(offset) or UTC
+    parsed = _parse_gmt_offset(offset)
+    zone: tzinfo = parsed or UTC
+    if (
+        (parsed is None or parsed.utcoffset(None) == timedelta(0))
+        and home_time_zone is not None
+        and home_country
+        and _ship_to_country(raw) == home_country.upper()
+    ):
+        zone = home_time_zone
 
     try:
         date = datetime.strptime(sdd, "%Y%m%d").date()
@@ -434,8 +466,8 @@ def _planned_window(raw: dict) -> tuple[str | None, str | None]:
     except ValueError:
         return None, None
 
-    start = datetime.combine(date, start_time, tzinfo=tzinfo)
-    end = datetime.combine(date, end_time, tzinfo=tzinfo)
+    start = datetime.combine(date, start_time, tzinfo=zone)
+    end = datetime.combine(date, end_time, tzinfo=zone)
     return start.isoformat(), end.isoformat()
 
 
@@ -663,7 +695,12 @@ def published_raw(raw: dict) -> dict:
 
 
 def normalize_parcel(
-    raw: dict, *, include_history: bool = False, locale: str = DEFAULT_LOCALE
+    raw: dict,
+    *,
+    include_history: bool = False,
+    locale: str = DEFAULT_LOCALE,
+    home_country: str | None = None,
+    home_time_zone: tzinfo | None = None,
 ) -> dict:
     """Return a carrier-agnostic parcel dict with the carrier payload under ``raw``.
 
@@ -678,7 +715,8 @@ def normalize_parcel(
     subset is about size, not secrecy.
 
     ``planned_from``/``planned_to`` come from ``sdd``/``sdst``/``sdt`` (see
-    :func:`_planned_window`) and stay ``None`` when that triplet is absent —
+    :func:`_planned_window`, which is what ``home_country`` and
+    ``home_time_zone`` are for) and stay ``None`` when that triplet is absent —
     which it is for a parcel with no live estimate, and always for a
     delivered one (the estimate disappears once a parcel is delivered).
     ``pickup_point`` and ``dimensions`` stay at their empty defaults — no
@@ -700,7 +738,9 @@ def normalize_parcel(
     tracking_code = requested_code or echoed_code
 
     activities = raw.get("shipmentProgressActivities") or []
-    planned_from, planned_to = _planned_window(raw)
+    planned_from, planned_to = _planned_window(
+        raw, home_country=home_country, home_time_zone=home_time_zone
+    )
 
     return {
         "carrier": "UPS",
