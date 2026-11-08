@@ -39,7 +39,46 @@ of these areas:
   `entity_registry.async_remove`; self-removal races and leaves ghosts.
 - **Say "pickup point"**, not "ServicePoint"/"parcel shop"/"locker".
 
+## The endpoint: GetSummaryStatus, never GetStatus
+
+`TRACKING_API_URL` points at `Track/GetSummaryStatus`. **Do not move it back
+to `Track/GetStatus`**, which is what every note before 2026-11-08 describes.
+That path is the one Akamai guards, and from about 2026-11-03 it stopped
+answering an unvalidated session at all: the bootstrap still succeeds, the
+POST hangs until the timeout. Measured on three residential addresses in two
+countries, including a fresh install's first request ever and an address
+rested 2.5 days, and with a header and body profile copied verbatim from a
+captured browser request. Only a sensor-validated browser session is answered
+there, and running Akamai's sensor JS is out of scope.
+
+The summary sibling under the same controller is not guarded and returns the
+**same** record — same envelope, 129 fields, `currentMilestone`, the full
+`shipmentProgressActivities` list. "Summary" is where the track SPA shows it,
+not a reduced payload. The bootstrap GET stays on the `GetStatus` URL: a GET
+falls through to the SPA shell, seeds both application cookies, and is
+unaffected.
+
+**An unknown code is two shapes, not one.** `GetStatus` answered `errorCode:
+"504"`; this path answers with an **empty `trackDetails[0]`**. Both are
+treated as not-found, and removing either lets a mistyped code through as a
+fieldless parcel.
+
+If lookups start hanging again, first check whether `GetStatus` answers once
+more — that is the diagnostic, before anything about headers. Mechanics and
+the full measurements: `carrier-research/ups/api/tracking.md` and
+`ups/ups-log.md`'s 2026-11-08 entries.
+
 ## The one fact everything here follows from
+
+**The budget below is a property of `GetStatus`, the closed path.** On
+`GetSummaryStatus` seven consecutive lookups answered inside a quarter of an
+hour, well past the three an address was granted, so that path's own ceiling
+is **unmeasured — not absent**. The maintainer's decision (2026-11-08) is to
+keep the budget, the one-request-per-cycle queue and the stand-down exactly as
+they are rather than relax them against an unknown. Do not propose loosening
+them without a measurement, and note the cost that was accepted knowingly: a
+user whose install has been failing waits out a stand-down of up to six hours
+after upgrading, because it is deliberately persisted across restarts.
 
 **UPS grants a request budget per IP address, and it is small.** An unvalidated
 session is answered **three times** from a residential address and then every
@@ -69,7 +108,11 @@ breaks the very thing that satisfies the check. Per-install variation might
 solve the fleet-fingerprint problem but is unmeasured; it needs a probe from a
 rested IP, not a guess.
 
-**`sec-ch-ua` is a live maintenance tripwire.** It pins a Chrome major version.
+**`sec-ch-ua` is a live maintenance tripwire.** It pins a Chrome major version
+(156 since 2026-11-08, aligned to a captured browser request along with
+`Accept-Encoding: … zstd`, `priority: u=1, i` and the body's
+`Requester: "st"`; none of that fixed the `GetStatus` hang, and it is kept
+only because it is closer to a real browser).
 If lookups start hanging while a sibling, unguarded endpoint still answers,
 bump the version triplet and `_CHROME_USER_AGENT` **together** in `api.py`
 before suspecting anything else.

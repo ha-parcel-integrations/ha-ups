@@ -93,14 +93,34 @@ CAPABILITIES = frozenset({"url", "history", "delivery_window"})
 #    A GET to the endpoint below (it only accepts POST) falls through to the
 #    SPA shell and seeds both application cookies, so the challenged page is
 #    not needed at all.
-# 2) TRACKING_API_URL: POST with the four Akamai guard headers
+# 2) TRACKING_API_URL: the track SPA's own summary call, which returns the
+#    same envelope and the same trackDetails[0] record as Track/GetStatus —
+#    129 fields, currentMilestone, the full shipmentProgressActivities list.
+#    "Summary" names where the SPA shows it, not a reduced payload.
+#
+#    It is deliberately NOT Track/GetStatus. That path is the one Akamai
+#    guards, and from 2026-11-03 it stopped answering an unvalidated session
+#    at all: the bootstrap still succeeds, the POST hangs until the timeout,
+#    measured on three residential addresses in two countries, after days of
+#    rest, and with a header and body profile copied verbatim from a captured
+#    browser request. Only a sensor-validated browser session is answered
+#    there, and running Akamai's sensor JS is out of scope for this
+#    integration. This sibling under the same controller is not guarded:
+#    seven consecutive lookups answered in 0.15-0.47s from an address whose
+#    GetStatus had just hung. If this one ever starts hanging too, check
+#    whether GetStatus answers again before anything else.
+#
+#    POST with the four Akamai guard headers
+
 #    (api.py's GUARD_HEADERS) plus the CSRF header. Response is a 200
 #    envelope even for a not-found number (branch on
 #    trackDetails[0].errorCode, never on HTTP status alone) — a missing/blank
 #    CSRF token is a clean 401; a header-guard failure is a silent hang, not
 #    an HTTP error.
 BOOTSTRAP_URL = "https://webapis.ups.com/track/api/Track/GetStatus?loc={locale}"
-TRACKING_API_URL = "https://webapis.ups.com/track/api/Track/GetStatus?loc={locale}"
+TRACKING_API_URL = (
+    "https://webapis.ups.com/track/api/Track/GetSummaryStatus?loc={locale}"
+)
 TRACKING_URL = "https://www.ups.com/track?loc={locale}&tracknum={tracking_code}"
 
 # The XSRF cookie the bootstrap sets, and the header its value is copied into

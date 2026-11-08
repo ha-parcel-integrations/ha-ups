@@ -153,6 +153,23 @@ async def test_no_authorization_header_is_ever_sent():
 # ---------------------------------------------------------------------------
 
 
+async def test_an_empty_track_detail_is_not_found():
+    """GetSummaryStatus answers an unknown code with an empty record.
+
+    Measured 2026-11-08 on a random invalid code: HTTP 200, trackDetails[0]
+    present but carrying no fields at all, and no errorCode. Without this
+    branch a mistyped code would reach normalize_parcel as a fieldless
+    parcel instead of being reported as not found.
+    """
+    session = _session(
+        cookies=[_cookie("X-XSRF-TOKEN-ST", "csrf-value")],
+        post_responses=[_response(200, _envelope({}))],
+    )
+    client = UPSApiClient(session)
+
+    assert await client.async_get_parcel("NOTATRACKINGNUMBER") is None
+
+
 async def test_error_code_504_is_not_found():
     session = _session(
         cookies=[_cookie("X-XSRF-TOKEN-ST", "csrf-value")],
@@ -403,4 +420,19 @@ def test_the_bootstrap_does_not_use_the_public_track_page():
     assert BOOTSTRAP_URL.startswith("https://webapis.ups.com/")
     assert "www.ups.com" not in BOOTSTRAP_URL
     # Same host as the POST, so the cookie is seeded by what will consume it.
-    assert BOOTSTRAP_URL.split("?")[0] == TRACKING_API_URL.split("?")[0]
+    # The paths differ on purpose: the lookup moved to GetSummaryStatus when
+    # GetStatus stopped answering unvalidated sessions, while the bootstrap
+    # GET stays on GetStatus, which is where it is measured to seed both
+    # application cookies.
+    assert TRACKING_API_URL.startswith("https://webapis.ups.com/")
+    marker = "/track/api/"
+    assert BOOTSTRAP_URL.split(marker)[0] == TRACKING_API_URL.split(marker)[0]
+
+
+def test_the_lookup_does_not_go_back_to_the_guarded_get_status():
+    """GetStatus hangs for every unvalidated session since 2026-11-03.
+
+    The bootstrap GET may use it — a GET falls through to the SPA shell and
+    seeds the cookies — but the POST that carries the lookup must not.
+    """
+    assert TRACKING_API_URL.split("?")[0].endswith("/Track/GetSummaryStatus")

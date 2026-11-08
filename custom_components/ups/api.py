@@ -1,4 +1,4 @@
-"""UPS public tracking API client (Track/GetStatus).
+"""UPS public tracking API client (Track/GetSummaryStatus).
 
 No account, no API key. Two calls per lookup:
 
@@ -10,13 +10,15 @@ No account, no API key. Two calls per lookup:
    ``HEADER_XSRF`` (a plain double-submit — nothing is derived or signed) and
    :data:`FETCH_HEADERS` returns the tracking payload.
 
+The lookup goes to ``Track/GetSummaryStatus``, not ``Track/GetStatus`` — see
+``const.py`` for why, and do not move it back. Both return the same record.
+
 The four Akamai client-hint headers in :data:`GUARD_HEADERS` are the one
 thing in this module that is genuinely load-bearing beyond the usual carrier
-boilerplate: ``Track/GetStatus`` is behind a guard that does not 403 a
-request it dislikes — it never answers at all. All four are required
-*together*; dropping any one of them makes every lookup hang until the
-client's own timeout, with nothing to log or parse. Do not "clean up" this
-header set.
+boilerplate: the guard on this host does not 403 a request it dislikes — it
+never answers at all. All four are required *together*; dropping any one of
+them makes every lookup hang until the client's own timeout, with nothing to
+log or parse. Do not "clean up" this header set.
 
 :data:`NAVIGATION_HEADERS` (bootstrap GET) and :data:`FETCH_HEADERS` (track
 POST) are deliberately **not** the same dict beyond that shared guard core. A
@@ -34,6 +36,11 @@ import time
 from typing import Any
 
 import aiohttp
+
+try:
+    from aiohttp.compression_utils import HAS_ZSTD
+except ImportError:  # pragma: no cover - aiohttp without zstd support
+    HAS_ZSTD = False
 
 from .const import (
     BOOTSTRAP_URL,
@@ -63,8 +70,13 @@ SLOW_REQUEST_SECONDS = 8.0
 # suite: allow browser user-agent (Akamai scores the client hints against a Chrome identity, per the note below)
 _CHROME_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+    "(KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
 )
+
+# Real Chrome has advertised zstd since 123, so leaving it out is an internal
+# inconsistency of the kind the guard scores. Only advertised where aiohttp
+# can decode it, or a zstd answer would become an unparseable body.
+_ACCEPT_ENCODING = "gzip, deflate, br, zstd" if HAS_ZSTD else "gzip, deflate, br"
 
 # The four headers Akamai's client-hint guard scores *for a Chrome identity*
 # (see the module docstring). What it actually checks is agreement with the
@@ -80,8 +92,8 @@ _CHROME_USER_AGENT = (
 # answers, bump this triplet and the User-Agent together before suspecting
 # anything else.
 GUARD_HEADERS = {
-    "Accept-Encoding": "gzip, deflate, br",
-    "sec-ch-ua": '"Not=A?Brand";v="99", "Google Chrome";v="151", "Chromium";v="151"',
+    "Accept-Encoding": _ACCEPT_ENCODING,
+    "sec-ch-ua": '"Not:A-Brand";v="8", "Chromium";v="156", "Google Chrome";v="156"',
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": '"macOS"',
 }
@@ -108,6 +120,7 @@ FETCH_HEADERS = {
     "sec-fetch-dest": "empty",
     "sec-fetch-mode": "cors",
     "sec-fetch-site": "same-site",
+    "priority": "u=1, i",
     "User-Agent": _CHROME_USER_AGENT,
     "Origin": "https://www.ups.com",
     "Referer": "https://www.ups.com/",
@@ -374,10 +387,8 @@ class UPSApiClient:
             "Locale": locale,
             "TrackingNumber": [tracking_code],
             "isBarcodeScanned": False,
-            "Requester": "quic",
-            "ClientUrl": "https://www.ups.com/track",
-            "returnToValue": "",
-            "AssociatedBcdnNumber": None,
+            "Requester": "st",
+            "ClientUrl": f"https://www.ups.com/track?loc={locale}&requester=ST/",
         }
         _LOGGER.debug(
             "UPS track POST %s for %s starting (csrf header present: %s)",
@@ -444,6 +455,13 @@ class UPSApiClient:
         if not isinstance(detail, dict):
             raise UPSApiError("trackDetails[0] was not an object")
 
+        # Two shapes mean the same thing. GetStatus answered an unknown code
+        # with errorCode 504; this endpoint answers it with an empty record
+        # instead, so a code the user mistyped would otherwise reach
+        # normalize_parcel as a parcel with no fields at all. Both are kept:
+        # the envelope is shared, and nothing says 504 cannot come back.
+        if not detail:
+            return None
         if detail.get("errorCode") == "504":
             return None
         if detail.get("errorCode"):

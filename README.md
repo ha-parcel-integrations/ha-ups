@@ -9,15 +9,6 @@
 >
 > 💬 Questions or feedback? Join the discussion on the [Home Assistant community](https://community.home-assistant.io/t/packages-postnl-dhl-nl-dpd-and-gls-parcel-integration/112433/).
 
-> ⚠️ **UPS currently does not answer this integration.** Since early November
-> 2026 every lookup times out, on every connection we know of, while the same
-> parcel still opens normally on ups.com. Waiting or restarting does not help,
-> and nothing in your setup causes it. Parcels keep their last known data, but
-> a newly added parcel stays `unknown`. Follow
-> [#16](https://github.com/ha-parcel-integrations/ha-ups/issues/16) and
-> [#17](https://github.com/ha-parcel-integrations/ha-ups/issues/17) for
-> updates.
-
 > **Not everything UPS shows is available here yet.** The weight and
 > pickup-point fields stay empty, and `at_pickup_point` has never been seen
 > on a real parcel — none of them has shown up on a real
@@ -222,7 +213,7 @@ logger:
 
 - **A parcel shows `unknown`** — either UPS has not scanned it yet (the endpoint reports the code as not found until the first scan) or the code is wrong, and then it picks up automatically once scanned; or the integration has never reached UPS for it. If the log shows "request timed out" for that parcel, it is the second case, see below.
 - **A status logs "Unrecognised UPS status"** — please [open an issue](https://github.com/ha-parcel-integrations/ha-ups/issues/new?template=unrecognised_status.yml) with the logged line so the mapping can be extended. `at_pickup_point` is the one still missing entirely, so a parcel waiting in a UPS Access Point is the most likely source.
-- **A poll logs "UPS fetch failed... request timed out"** — UPS's tracking endpoint does not return an error when it won't answer; the request just hangs until the timeout. **Since early November 2026 this happens to every lookup**, also after days of rest and on a fresh install (see the notice at the top), so for now it is not something you can fix or wait out. The integration still stands down for two hours after a failed poll, doubling up to six, so it doesn't keep knocking. Outside that, a single timeout can also mean this connection has used up its small allowance of lookups; that clears by itself within a few hours.
+- **A poll logs "UPS fetch failed... request timed out"** — UPS's tracking endpoint does not return an error when it won't answer; the request simply hangs until the timeout. Usually it means this connection has used up its small allowance of lookups, and it clears by itself within a few hours: the integration stands down for two hours after a failed poll, doubling up to six, and will not let anything force extra requests during that window. If *every* lookup keeps timing out for days on end, including right after a restart, please [open an issue](https://github.com/ha-parcel-integrations/ha-ups/issues/new) — that pattern means UPS has changed something, not that your connection is busy.
 - **No delivery window / calendar entry for a parcel** — UPS only sends an estimate while one exists for that parcel (it disappears once delivered), and only from ``sdd``/``sdst``/``sdt``; a parcel without a current estimate keeps `planned_from`/`planned_to` at `None`.
 
 ## Related integrations
