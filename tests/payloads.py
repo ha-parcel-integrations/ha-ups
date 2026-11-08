@@ -110,6 +110,31 @@ def active_sample_with_eta(code: str = ACTIVE_CODE) -> dict:
     return sample
 
 
+def nl_sample_with_eta(code: str = ACTIVE_CODE) -> dict:
+    """A live estimate for a parcel to a Dutch address, as UPS sent it.
+
+    Captured 2026-11 (UPS Worldwide Saver from outside the EU): the window is
+    in Dutch local time — ups.com showed the same parcel as "Maandag, November
+    09, 11:00 - 14:00" — but ``shipToGMTOffset`` says ``+00:00``, which is
+    what UPS sends when it does not know. The ship-from offset is right.
+    """
+    sample = active_sample(code)
+    sample.update(
+        {
+            "sdd": "20261109",
+            "sdst": "11:00:00",
+            "sdt": "14:00:00",
+            "packageStatusTime": "11:00 - 14:00",
+            "shipmentGMTInfo": {
+                "shipFromGMTOffset": "-06:00",
+                "shipToGMTOffset": "+00:00",
+            },
+            "shipToAddress": {"country": "NL"},
+        }
+    )
+    return sample
+
+
 def weighed_sample(code: str = DELIVERED_CODE) -> dict:
     """A delivered parcel with a populated weight — never seen live yet, but
     the mapping (KGS/LBS -> kg) must still be exercised."""

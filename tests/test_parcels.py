@@ -6,6 +6,7 @@ rewrite per carrier) can be tested as plain functions.
 """
 
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -37,9 +38,12 @@ from .payloads import (
     active_sample,
     active_sample_with_eta,
     delivered_sample,
+    nl_sample_with_eta,
     not_found_envelope,
     weighed_sample,
 )
+
+AMSTERDAM = ZoneInfo("Europe/Amsterdam")
 
 # ---------------------------------------------------------------------------
 # map_parcel_status / map_event_status
@@ -380,6 +384,66 @@ def test_normalize_active_parcel_with_eta():
     # sdd/sdst/sdt, local to the recipient via shipToGMTOffset.
     assert parcel["planned_from"] == "2026-09-18T15:30:00-06:00"
     assert parcel["planned_to"] == "2026-09-18T19:30:00-06:00"
+
+
+def test_normalize_planned_window_unknown_offset_reads_home_time_zone():
+    """UPS sends shipToGMTOffset "+00:00" for a Dutch address it has no offset
+    for. A parcel to HA's own country is read in HA's zone instead — this one
+    is the 11:00-14:00 window ups.com showed in Dutch local time."""
+    parcel = normalize_parcel(
+        nl_sample_with_eta(), home_country="NL", home_time_zone=AMSTERDAM
+    )
+    assert parcel["planned_from"] == "2026-11-09T11:00:00+01:00"
+    assert parcel["planned_to"] == "2026-11-09T14:00:00+01:00"
+
+
+def test_normalize_planned_window_home_time_zone_follows_the_delivery_date():
+    """DST is the one in force on the delivery date, not today's."""
+    raw = nl_sample_with_eta()
+    raw["sdd"] = "20260715"
+    parcel = normalize_parcel(raw, home_country="NL", home_time_zone=AMSTERDAM)
+    assert parcel["planned_from"] == "2026-07-15T11:00:00+02:00"
+    assert parcel["planned_to"] == "2026-07-15T14:00:00+02:00"
+
+
+def test_normalize_planned_window_missing_offset_reads_home_time_zone():
+    raw = nl_sample_with_eta()
+    del raw["shipmentGMTInfo"]
+    parcel = normalize_parcel(raw, home_country="NL", home_time_zone=AMSTERDAM)
+    assert parcel["planned_from"] == "2026-11-09T11:00:00+01:00"
+
+
+@pytest.mark.parametrize(
+    "ship_to",
+    [{"country": "BE"}, {}, None],
+    ids=["other-country", "no-country", "no-address"],
+)
+def test_normalize_planned_window_unknown_offset_abroad_stays_utc(ship_to):
+    """Only HA's own country is known to be in HA's zone; anything else keeps
+    the offset UPS sent."""
+    raw = nl_sample_with_eta()
+    raw["shipToAddress"] = ship_to
+    parcel = normalize_parcel(raw, home_country="NL", home_time_zone=AMSTERDAM)
+    assert parcel["planned_from"] == "2026-11-09T11:00:00+00:00"
+    assert parcel["planned_to"] == "2026-11-09T14:00:00+00:00"
+
+
+def test_normalize_planned_window_known_offset_beats_home_time_zone():
+    """A non-zero shipToGMTOffset is a real one (issue #1), even for a parcel
+    to HA's own country."""
+    raw = active_sample_with_eta()
+    raw["shipToAddress"] = {"country": "CA"}
+    regina = ZoneInfo("America/Regina")
+    parcel = normalize_parcel(raw, home_country="CA", home_time_zone=regina)
+    assert parcel["planned_from"] == "2026-09-18T15:30:00-06:00"
+    assert parcel["planned_to"] == "2026-09-18T19:30:00-06:00"
+
+
+def test_normalize_planned_window_without_home_keeps_the_sent_offset():
+    """Called without a home country/zone, "+00:00" is taken at its word."""
+    parcel = normalize_parcel(nl_sample_with_eta())
+    assert parcel["planned_from"] == "2026-11-09T11:00:00+00:00"
+    assert parcel["planned_to"] == "2026-11-09T14:00:00+00:00"
 
 
 def test_normalize_planned_window_missing_offset_falls_back_to_utc():

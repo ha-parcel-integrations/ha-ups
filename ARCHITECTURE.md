@@ -226,6 +226,17 @@ change display text UPS returns — the `nameKey` vocabulary the status map runs
 on is locale-independent — but guessing one that turns out invalid is not worth
 the risk on a carrier this expensive to ask twice.
 
+### Delivery window time zone
+`sdd`/`sdst`/`sdt` are the recipient's local time, read in
+`shipmentGMTInfo.shipToGMTOffset`. UPS sends `+00:00` there when it does not
+know the offset (seen on two parcels to a Dutch address), so when the offset
+is `+00:00` or missing and `shipToAddress.country` is HA's own country, the
+window is read in HA's time zone instead, on the delivery date so DST is
+right for that day. The coordinator resolves country and zone once, like the
+locale, and passes them to `normalize_parcel`; `parcels.py` stays pure. A
+non-zero offset is trusted as sent, and a `+00:00` parcel to another country
+stays UTC, because nothing in the payload says which zone it is in.
+
 ### Timing is jittered, additively
 Every computed interval carries `JITTER_FRACTION` on top of the stable
 per-install stagger. Spacing buys nothing against the budget itself — that is a
