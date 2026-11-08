@@ -232,8 +232,11 @@ the risk on a carrier this expensive to ask twice.
 know the offset (seen on two parcels to a Dutch address), so when the offset
 is `+00:00` or missing and `shipToAddress.country` is HA's own country, the
 window is read in HA's time zone instead, on the delivery date so DST is
-right for that day. The coordinator resolves country and zone once, like the
-locale, and passes them to `normalize_parcel`; `parcels.py` stays pure. A
+right for that day. The coordinator resolves the country once, like the
+locale, but reads the **time zone per publish**: HA's zone is editable in
+Settings without a restart, and resolved at startup a window would keep the
+old offset until the entry happened to reload. Both are passed to
+`normalize_parcel`; `parcels.py` stays pure. A
 non-zero offset is trusted as sent, and a `+00:00` parcel to another country
 stays UTC, because nothing in the payload says which zone it is in.
 

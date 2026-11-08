@@ -569,3 +569,29 @@ async def test_planned_window_uses_the_home_country_and_time_zone(hass):
 
     assert parcels[0]["planned_from"] == "2026-11-09T11:00:00+01:00"
     assert parcels[0]["planned_to"] == "2026-11-09T14:00:00+01:00"
+
+
+async def test_planned_window_follows_a_live_time_zone_change(hass):
+    """HA's time zone is editable in Settings without a restart.
+
+    Resolved once at startup, a window would keep the old offset until the
+    entry happened to reload — so the zone is read per publish.
+    """
+    hass.config.country = "NL"
+    await hass.config.async_set_time_zone("Europe/Amsterdam")
+    entry = _entry_with([{CONF_TRACKING_CODE: ACTIVE_CODE}])
+    entry.add_to_hass(hass)
+    client = _fake_client()
+    client.async_get_parcel.return_value = nl_sample_with_eta()
+    coordinator = UPSCoordinator(hass, client, entry)
+
+    assert (await coordinator._async_update_data())[0][
+        "planned_from"
+    ] == "2026-11-09T11:00:00+01:00"
+
+    await hass.config.async_set_time_zone("Pacific/Auckland")
+    coordinator._budget.tokens = 1
+
+    parcels = await coordinator._async_update_data()
+
+    assert parcels[0]["planned_from"] == "2026-11-09T11:00:00+13:00"
