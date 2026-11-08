@@ -158,6 +158,20 @@ def test_build_history_falls_back_to_the_scan_code():
     assert dp_entries[0]["status"] == ParcelStatus.IN_TRANSIT
 
 
+def test_build_history_maps_the_user_reported_arrival_code():
+    """OC is "Arrived at Facility", the same wording AR and OR carry.
+
+    Reported on issue #4 as the first scan after the label on a Worldwide
+    Saver parcel, and absent from the 51 codes six real parcels produced
+    here, so it would otherwise leave that entry statusless with a warning.
+    """
+    history = build_history(
+        [{"actCode": "OC", "gmtDate": "20260627", "gmtTime": "11:51:34"}]
+    )
+    assert history[0]["raw_status"] == "OC"
+    assert history[0]["status"] == ParcelStatus.IN_TRANSIT
+
+
 def test_build_history_prefers_the_milestone_over_the_scan_code():
     """The milestone is the better source wherever there is one."""
     history = build_history(

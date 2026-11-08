@@ -48,9 +48,13 @@ KNOWN_CAPABILITIES = frozenset(
 # customs, incurred import duties, was held three times and had its address
 # corrected, and still carried none:
 #
-# - "weight" is NOT declared: additionalInformation.weight was "" (empty) on
-#   every one of them. normalize_parcel still converts it when present — the
-#   field is real and documented, just never seen populated yet.
+# - "weight" is NOT declared, and this one is now settled rather than
+#   unobserved: a user compared the same parcel on ups.com signed out and
+#   signed in (issue #3) — the weight shows only when signed in, while
+#   additionalInformation.weight stayed "" for the integration. An
+#   account-less lookup will not carry it, so do not revisit this on a
+#   keyless payload. normalize_parcel still converts it when present,
+#   because the field is real and an account surface would populate it.
 # - "dimensions" is NOT declared: no dimension field exists in the payload.
 # - "delivery_window" IS declared: confirmed live 2026-09-16 (issue #1) —
 #   sdd/sdst/sdt carried an estimate that matched ups.com exactly. See

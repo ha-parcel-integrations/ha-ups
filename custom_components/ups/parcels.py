@@ -146,6 +146,10 @@ _ACTIVITY_CODE_MAP: dict[str, ParcelStatus | None] = {
     "PU": ParcelStatus.IN_TRANSIT,
     "OR": ParcelStatus.IN_TRANSIT,
     "AR": ParcelStatus.IN_TRANSIT,
+    # Reported by a user (issue #4), not seen in a payload here: the first
+    # scan after the label on a Worldwide Saver parcel, wording "Arrived at
+    # Facility" — the same sentence AR and OR carry.
+    "OC": ParcelStatus.IN_TRANSIT,
     "SS": ParcelStatus.IN_TRANSIT,
     "DP": ParcelStatus.IN_TRANSIT,
     "WH": ParcelStatus.IN_TRANSIT,
@@ -438,7 +442,11 @@ def _planned_window(raw: dict) -> tuple[str | None, str | None]:
 def _weight_kg(raw: dict) -> float | None:
     """Convert ``additionalInformation.weight`` to kilograms, or ``None``.
 
-    ``weight`` is ``""`` when absent — the only value observed so far.
+    ``weight`` is ``""`` when absent, which is what this endpoint always
+    returns: a user compared the same parcel signed out and signed in on
+    ups.com (issue #4's sibling, #3) and the weight appears only for a
+    signed-in session. The conversion stays because the field is real and
+    the account surface would carry it.
     When present, ``weightUnit`` is expected to be ``KGS`` or ``LBS``
     (unverified — no populated sample exists yet); an unrecognised unit
     publishes ``None`` rather than guessing which one it is.
