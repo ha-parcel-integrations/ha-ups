@@ -61,6 +61,11 @@ _STATUS_MAP: dict[str, ParcelStatus] = {
     "cms.stapp.clearedCustoms": ParcelStatus.IN_TRANSIT,
     "cms.stapp.clearedImprtCustoms": ParcelStatus.IN_TRANSIT,
     "cms.stapp.tenderedToUPSDeliveryAgent": ParcelStatus.IN_TRANSIT,
+    # UPS Ground Saver (formerly SurePost): UPS hands the parcel to the local
+    # post office, which makes the final delivery. Still moving towards the
+    # recipient, so in_transit; delivery by the post office arrives as
+    # uspsDeliveredMsg / uspsTrackingDeliveredMsg1 below.
+    "cms.stapp.transferPostOffice": ParcelStatus.IN_TRANSIT,
     # Administrative events, not exceptions: the parcel is still moving
     # normally through the network. Mapping either to `problem` would fire
     # exception notifications for a routine — and in the second case
