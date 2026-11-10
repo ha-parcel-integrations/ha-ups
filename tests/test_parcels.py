@@ -67,6 +67,9 @@ AMSTERDAM = ZoneInfo("Europe/Amsterdam")
         ("cms.stapp.addressChangeRequested", ParcelStatus.IN_TRANSIT),
         ("cms.stapp.addressChangeRequestCompleted", ParcelStatus.IN_TRANSIT),
         ("cms.stapp.dropoffAccessPoint", ParcelStatus.IN_TRANSIT),
+        # Observed on the wire 2026-11-10: a UPS Ground Saver parcel handed
+        # to the local post office for final delivery.
+        ("cms.stapp.transferPostOffice", ParcelStatus.IN_TRANSIT),
     ],
 )
 def test_map_parcel_status_known(code, expected):
