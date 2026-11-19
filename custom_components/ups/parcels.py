@@ -15,7 +15,8 @@ machinery and should be left alone.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta, tzinfo
+from collections.abc import Iterable
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 import logging
 from typing import Any
 
@@ -400,6 +401,108 @@ def _delivered_at(raw: dict, delivered: bool) -> str | None:
     return newest
 
 
+def _moment(value: Any, zone: tzinfo) -> tuple[datetime, bool, str] | None:
+    """Return ``(aware datetime, date_only, text)`` for a carrier time, or ``None``.
+
+    A naive time or a bare date gets ``zone``; an aware time keeps its offset
+    and, when it came in as a string, its own spelling.
+    """
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, date):
+        moment = datetime.combine(value, time.min, tzinfo=zone)
+        return moment, True, moment.isoformat()
+    elif isinstance(value, str) and value:
+        try:
+            if len(value) == 10:
+                moment = datetime.combine(
+                    date.fromisoformat(value), time.min, tzinfo=zone
+                )
+                return moment, True, moment.isoformat()
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if parsed.tzinfo:
+            return parsed, False, value
+    else:
+        return None
+    moment = parsed if parsed.tzinfo else parsed.replace(tzinfo=zone)
+    return moment, False, moment.isoformat()
+
+
+def _end_of_day(moment: datetime, zone: tzinfo) -> datetime:
+    local = moment.astimezone(zone)
+    return datetime.combine(local.date(), time(23, 59, 59), tzinfo=zone)
+
+
+def planned_window(
+    start: Any, end: Any, *, zone: tzinfo
+) -> tuple[str | None, str | None]:
+    """Return ``(planned_from, planned_to)`` in the canonical window shape.
+
+    ``start`` and ``end`` are ISO strings, dates or datetimes, or ``None``; an
+    epoch number must be converted first (see ``to_iso_timestamp``). A window
+    keeps both ends. One moment with a time ends at ``23:59:59`` the same local
+    day; a date covers ``00:00:00`` to ``23:59:59``; two dates run from the
+    first day's start to the last day's end. Equal values are one moment,
+    reversed values are swapped, and ``planned_to`` is never set without
+    ``planned_from``. ``zone`` is the carrier's own zone: it dates naive times
+    and bare dates and decides which day a moment ends on, so a ``Z`` moment
+    still ends on the carrier's local day. When nothing is left of that day
+    after the moment, there is no ``planned_to``.
+    """
+    first = _moment(start, zone)
+    last = _moment(end, zone)
+    if first is None:
+        first, last = last, None
+    if first is None:
+        return None, None
+
+    def closing(moment: tuple[datetime, bool, str]) -> datetime:
+        return _end_of_day(moment[0], zone) if moment[1] else moment[0]
+
+    if last is not None and closing(last) < first[0]:
+        first, last = last, first
+    if last is not None and closing(last) == first[0]:
+        last = None
+
+    if last is None:
+        end_of_day = _end_of_day(first[0], zone)
+        return first[2], end_of_day.isoformat() if end_of_day > first[0] else None
+    return first[2], closing(last).isoformat() if last[1] else last[2]
+
+
+_NO_WINDOW_STATUSES = frozenset(
+    {ParcelStatus.AT_PICKUP_POINT, ParcelStatus.RETURNING, ParcelStatus.DELIVERED}
+)
+
+
+def planned_for_status(
+    status: ParcelStatus, planned_from: str | None, planned_to: str | None
+) -> tuple[str | None, str | None]:
+    """Empty the delivery window once the parcel is at its destination or done."""
+    if status in _NO_WINDOW_STATUSES:
+        return None, None
+    return planned_from, planned_to
+
+
+def is_pickup(
+    route_flag: bool | None,
+    status: ParcelStatus,
+    event_statuses: Iterable[ParcelStatus | None] = (),
+) -> bool:
+    """Whether the delivery route ends at a pickup point.
+
+    The carrier's own route flag wins; otherwise the parcel having reached
+    ``AT_PICKUP_POINT`` at any point counts, so the value survives collection.
+    """
+    if route_flag:
+        return True
+    return status is ParcelStatus.AT_PICKUP_POINT or any(
+        event is ParcelStatus.AT_PICKUP_POINT for event in event_statuses
+    )
+
+
 def _parse_gmt_offset(offset: str | None) -> tzinfo | None:
     """Parse a ``±HH:MM`` offset string (``shipmentGMTInfo``) to a ``timezone``."""
     if not offset:
@@ -465,15 +568,15 @@ def _planned_window(
         zone = home_time_zone
 
     try:
-        date = datetime.strptime(sdd, "%Y%m%d").date()
+        day = datetime.strptime(sdd, "%Y%m%d").date()
         start_time = datetime.strptime(sdst, "%H:%M:%S").time()
         end_time = datetime.strptime(sdt, "%H:%M:%S").time()
     except ValueError:
         return None, None
 
-    start = datetime.combine(date, start_time, tzinfo=zone)
-    end = datetime.combine(date, end_time, tzinfo=zone)
-    return start.isoformat(), end.isoformat()
+    start = datetime.combine(day, start_time, tzinfo=zone)
+    end = datetime.combine(day, end_time, tzinfo=zone)
+    return planned_window(start, end, zone=zone)
 
 
 def _weight_kg(raw: dict) -> float | None:
@@ -699,6 +802,47 @@ def published_raw(raw: dict) -> dict:
     return {key: value for key, value in raw.items() if key in PUBLISHED_RAW_FIELDS}
 
 
+def _journey_status(status: ParcelStatus, raw: dict) -> ParcelStatus:
+    """Fold ``isDelivered`` and ``isPickedUpByCustomer`` into the status.
+
+    ``isDelivered`` is UPS's own end-of-journey flag and stays authoritative: a
+    delivered-looking milestone on a parcel it does not call delivered (one
+    package of several) keeps the parcel in transit. A parcel it does call
+    delivered is delivered unless it is on its way back to the shipper, or its
+    milestone says it waits at a pickup point and ``isDeliveredToUAP`` says it
+    was just dropped there without ``isPickedUpByCustomer`` yet. A collected
+    parcel (``isPickedUpByCustomer``) is delivered. ``isDeliveredToUAP`` alone
+    never counts as delivered. Neither Access Point flag has been observed.
+    """
+    if status is ParcelStatus.RETURNING:
+        return status
+    if raw.get("isPickedUpByCustomer"):
+        return ParcelStatus.DELIVERED
+    if raw.get("isDelivered"):
+        if status is ParcelStatus.AT_PICKUP_POINT and raw.get("isDeliveredToUAP"):
+            return status
+        return ParcelStatus.DELIVERED
+    if status is ParcelStatus.DELIVERED:
+        return ParcelStatus.IN_TRANSIT
+    return status
+
+
+def _activity_statuses(activities: list) -> list[ParcelStatus | None]:
+    """Statuses of the scans, mapped quietly (no unmapped-code warning)."""
+    statuses: list[ParcelStatus | None] = []
+    for activity in activities:
+        if not isinstance(activity, dict):
+            continue
+        name = activity.get("milestoneName")
+        key = name.get("nameKey") if isinstance(name, dict) else None
+        statuses.append(
+            _STATUS_MAP.get(key)
+            if key
+            else _ACTIVITY_CODE_MAP.get(activity.get("actCode"))
+        )
+    return statuses
+
+
 def normalize_parcel(
     raw: dict,
     *,
@@ -733,8 +877,10 @@ def normalize_parcel(
     fit to publish as either.
     """
     raw_status = _current_milestone_key(raw)
-    status = map_parcel_status(raw_status)
-    delivered = bool(raw.get("isDelivered"))
+    status = _journey_status(map_parcel_status(raw_status), raw)
+    delivered = status is ParcelStatus.DELIVERED or (
+        status is ParcelStatus.RETURNING and bool(raw.get("isDelivered"))
+    )
 
     requested_code = raw.get("requestedTrackingNumber")
     echoed_code = raw.get("trackingNumber")
@@ -743,8 +889,14 @@ def normalize_parcel(
     tracking_code = requested_code or echoed_code
 
     activities = raw.get("shipmentProgressActivities") or []
-    planned_from, planned_to = _planned_window(
-        raw, home_country=home_country, home_time_zone=home_time_zone
+    planned_from, planned_to = planned_for_status(
+        status,
+        *_planned_window(raw, home_country=home_country, home_time_zone=home_time_zone),
+    )
+    pickup = is_pickup(
+        bool(raw.get("isDeliveredToUAP") or raw.get("isPickedUpByCustomer")),
+        status,
+        _activity_statuses(activities),
     )
 
     return {
@@ -758,11 +910,10 @@ def normalize_parcel(
         "delivered_at": _delivered_at(raw, delivered),
         "planned_from": planned_from,
         "planned_to": planned_to,
-        # Derived from the status, not from a field: no upsAccessPoint object
-        # has ever been seen populated, so the location stays None — but a
-        # parcel whose milestone says it is waiting to be collected must not
-        # publish pickup False alongside it.
-        "pickup": status == ParcelStatus.AT_PICKUP_POINT,
+        # Derived from the status and the scans, not from a field: no
+        # upsAccessPoint object has ever been seen populated, so the location
+        # stays None — but a parcel that reached a pickup point stays pickup.
+        "pickup": pickup,
         "pickup_point": None,
         "url": tracking_url(tracking_code, locale=locale),
         "weight": _weight_kg(raw),

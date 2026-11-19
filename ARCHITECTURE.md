@@ -297,8 +297,9 @@ without this a delivered parcel keeps costing a request every cycle. The code
 stays in the options list and its cached payload keeps feeding the delivered
 sensor until the retention filter drops it.
 
-`delivered` comes from `isDelivered`, which marks the end of the *journey*, not
-a delivery: a parcel returned to the shipper carries it with no
+`isDelivered` is folded into the status, and `delivered` follows the status
+(plus `returning` once `isDelivered` says it is back at the shipper). The flag
+marks the end of the *journey*, not a delivery: a parcel returned to the shipper carries it with no
 `cms.stapp.delivered` scan anywhere. `_delivered_at()` therefore falls back to
 the newest scan, or such a parcel would sort last forever and the days-based
 retention filter — which keeps what it cannot parse — would never drop it.
@@ -381,6 +382,7 @@ the hub's `device_id`.
 | `UPSIncomingParcelsSensor` | `{entry_id}_incoming_parcels` |
 | `UPSParcelSensor` | `{entry_id}_{barcode}` |
 | `UPSNextDeliverySensor` | `{entry_id}_next_delivery` |
+| `UPSEnRouteToPickupPointSensor` | `{entry_id}_en_route_to_pickup_point` |
 | `UPSAwaitingPickupSensor` | `{entry_id}_awaiting_pickup` |
 | `UPSDeliveredParcelsSensor` | `{entry_id}_delivered_parcels` |
 | `UPSLastUpdateSensor` | `{entry_id}_last_update` |

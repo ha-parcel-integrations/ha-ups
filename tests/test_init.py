@@ -138,6 +138,10 @@ async def test_per_parcel_sensor_spawn_and_remove(hass):
             )
             is None
         )
+        for suffix in ("awaiting_pickup", "en_route_to_pickup_point"):
+            assert registry.async_get_entity_id(
+                "sensor", DOMAIN, f"{entry.entry_id}_{suffix}"
+            )
 
 
 async def test_options_update_applies_live_without_reload(hass):

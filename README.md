@@ -142,6 +142,7 @@ Standard HA removal applies: **Settings → Devices & Services → UPS → ⋮ �
 | `sensor.ups_incoming_parcels` | Number of active tracked parcels, full list under the `parcels` attribute |
 | `sensor.ups_parcel_<code>` | One per tracked parcel; state is the canonical status, attributes carry the full normalised parcel |
 | `sensor.ups_next_delivery` | Earliest expected delivery moment across all active parcels |
+| `sensor.ups_en_route_to_pickup_point` | Parcels on their way to a UPS Access Point, full list under the `parcels` attribute |
 | `sensor.ups_awaiting_pickup` | Parcels waiting for you at a UPS Access Point, full list under the `parcels` attribute |
 | `sensor.ups_delivered_parcels` | Recently delivered parcels (see the retention option) |
 | `calendar.ups_deliveries` | Read-only calendar of expected deliveries, no extra API calls |
@@ -214,7 +215,7 @@ logger:
 - **A parcel shows `unknown`** — either UPS has not scanned it yet (the endpoint reports the code as not found until the first scan) or the code is wrong, and then it picks up automatically once scanned; or the integration has never reached UPS for it. If the log shows "request timed out" for that parcel, it is the second case, see below.
 - **A status logs "Unrecognised UPS status"** — please [open an issue](https://github.com/ha-parcel-integrations/ha-ups/issues/new?template=unrecognised_status.yml) with the logged line so the mapping can be extended. `at_pickup_point` is the one still missing entirely, so a parcel waiting in a UPS Access Point is the most likely source.
 - **A poll logs "UPS fetch failed... request timed out"** — UPS's tracking endpoint does not return an error when it won't answer; the request simply hangs until the timeout. Usually it means this connection has used up its small allowance of lookups, and it clears by itself within a few hours: the integration stands down for two hours after a failed poll, doubling up to six, and will not let anything force extra requests during that window. If *every* lookup keeps timing out for days on end, including right after a restart, please [open an issue](https://github.com/ha-parcel-integrations/ha-ups/issues/new) — that pattern means UPS has changed something, not that your connection is busy.
-- **No delivery window / calendar entry for a parcel** — UPS only sends an estimate while one exists for that parcel (it disappears once delivered), and only from ``sdd``/``sdst``/``sdt``; a parcel without a current estimate keeps `planned_from`/`planned_to` at `None`.
+- **No delivery window / calendar entry for a parcel** — UPS only sends an estimate while one exists for that parcel (it disappears once delivered), and only from ``sdd``/``sdst``/``sdt``; a parcel without a current estimate keeps `planned_from`/`planned_to` at `None`. A single delivery time runs to the end of that day, and the window is empty once the parcel is at a pickup point, returning or delivered.
 - **A delivery window is an hour or two off** — UPS sends the window in the recipient's local time but sometimes leaves out which time zone that is. For a parcel to the country set in Home Assistant, the integration then uses Home Assistant's time zone; for a parcel to another country it can only assume UTC.
 
 ## Related integrations

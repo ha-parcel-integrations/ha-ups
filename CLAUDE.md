@@ -207,6 +207,29 @@ over-redact: `TO_REDACT` covers the payload, and the coordinator scrubs the
 tracking code out of each recorded error string by hand, because that field is
 the one `async_redact_data` cannot reach.
 
+## Parcel contract: status, window, pickup
+
+- `isDelivered` is folded into the status (`_journey_status`) and stays
+  authoritative over scans: a delivered milestone on a parcel UPS does not call
+  delivered is `in_transit`, and `isDelivered` turns any other status into
+  `delivered`. Exceptions: `returning` is kept, and `at_pickup_point` is kept
+  only when `isDeliveredToUAP` is true and `isPickedUpByCustomer` is not
+  (dropped at the point, not collected). `isPickedUpByCustomer` alone means
+  `delivered`; `isDeliveredToUAP` alone never does. Both flags are unobserved
+  (pending real-parcel evidence). `delivered` is `status is DELIVERED`, plus
+  `returning` with `isDelivered` (back at the shipper); never read the flag
+  again afterwards.
+- `planned_from` / `planned_to` go through `planned_window` and are emptied by
+  `planned_for_status` at `at_pickup_point`, `returning` and `delivered`.
+- `pickup` is `is_pickup`: `isDeliveredToUAP` / `isPickedUpByCustomer`, else the
+  status or any scan that reached a pickup point,
+  so it stays true once collected. The `en_route_to_pickup_point` sensor counts
+  `pickup` parcels not yet at the point (not `at_pickup_point`, not
+  `returning`); it reads 0 until a real parcel shows `isDeliveredToUAP` /
+  `isPickedUpByCustomer` before arrival, which is still pending.
+- `next_delivery` skips a parcel whose window has ended; the calendar shows a
+  00:00:00–23:59:59 window as an all-day event.
+
 ## Options and reloads
 
 The options flow is exactly `Parcels` (one editable multi-code list) and

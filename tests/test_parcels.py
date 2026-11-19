@@ -482,15 +482,23 @@ def test_normalize_planned_window_partial_triplet_stays_none(field):
     assert parcel["planned_to"] is None
 
 
-def test_normalize_isDelivered_drives_delivered_not_the_status_map():
-    """delivered comes from isDelivered, a real boolean — never derived from
-    the status map."""
+def test_isDelivered_stays_authoritative_over_a_delivered_milestone():
+    """A delivered-looking milestone on a parcel UPS does not call delivered
+    (one package of several) keeps the parcel active."""
     raw = delivered_sample()
     raw["isDelivered"] = False
     parcel = normalize_parcel(raw)
-    assert parcel["status"] == ParcelStatus.DELIVERED  # still maps as delivered
-    assert parcel["delivered"] is False  # but the flag is not derived from it
+    assert parcel["status"] == ParcelStatus.IN_TRANSIT
+    assert parcel["delivered"] is False
     assert parcel["delivered_at"] is None
+
+
+def test_isDelivered_promotes_a_parcel_whose_milestone_says_otherwise():
+    raw = delivered_sample()
+    raw["currentMilestone"] = {"nameKey": "cms.stapp.outForDelivery"}
+    parcel = normalize_parcel(raw)
+    assert parcel["status"] == ParcelStatus.DELIVERED
+    assert parcel["delivered"] is True
 
 
 def test_a_returned_parcel_is_stamped_from_its_last_scan():
