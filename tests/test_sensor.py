@@ -52,6 +52,13 @@ def test_incoming_counts_and_lists():
     assert len(sensor.extra_state_attributes["parcels"]) == 2
 
 
+def test_next_delivery_carries_the_contents():
+    parcel = _parcel("A", planned_from="2099-05-01T10:00:00Z")
+    parcel["contents"] = "Running shoes"
+    sensor = UPSNextDeliverySensor(_coordinator([parcel]), _entry())
+    assert sensor.extra_state_attributes["contents"] == "Running shoes"
+
+
 def test_parcel_sensor_status_and_attributes():
     parcel = _parcel("A", status=ParcelStatus.OUT_FOR_DELIVERY)
     sensor = UPSParcelSensor(_coordinator([parcel]), _entry(), "A")
