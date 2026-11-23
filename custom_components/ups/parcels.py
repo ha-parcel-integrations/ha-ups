@@ -835,10 +835,13 @@ def _activity_statuses(activities: list) -> list[ParcelStatus | None]:
             continue
         name = activity.get("milestoneName")
         key = name.get("nameKey") if isinstance(name, dict) else None
+        code = activity.get("actCode")
         statuses.append(
             _STATUS_MAP.get(key)
             if key
-            else _ACTIVITY_CODE_MAP.get(activity.get("actCode"))
+            else _ACTIVITY_CODE_MAP.get(code)
+            if isinstance(code, str)
+            else None
         )
     return statuses
 
