@@ -188,7 +188,7 @@ Every payload is the full normalised parcel plus the hub's `device_id`. Events a
 
 | Service | Fields | Description |
 |---|---|---|
-| `ups.track_parcel` | `tracking_code` | Start tracking a parcel |
+| `ups.track_parcel` | `tracking_code`, `contents` (optional) | Start tracking a parcel, and optionally set what is in it |
 | `ups.untrack_parcel` | `tracking_code` | Stop tracking a parcel |
 | `ups.update_contents` | `tracking_code`, `contents` | Set or clear a note on what is in a parcel; shown as `contents` and as the calendar event title |
 
