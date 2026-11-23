@@ -17,7 +17,7 @@ from typing import Any
 
 import aiohttp
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -47,6 +47,7 @@ from .const import (
     TRACKED_CODE_SOFT_LIMIT,
     ParcelStatus,
 )
+from .contents import ContentsStore
 from .parcels import apply_delivered_filter, normalize_parcel, sort_parcels_by_ts
 
 _LOGGER = logging.getLogger(__name__)
@@ -218,6 +219,7 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
             update_interval=timedelta(minutes=HOT_INTERVAL_MINUTES),
         )
         self._client = client
+        self.contents_store = ContentsStore(hass, entry.entry_id)
         # Resolved once at startup — HA's locale/country don't change without
         # a restart, and the nameKey vocabulary we map on is locale-independent
         # anyway (see _resolve_locale).
@@ -925,6 +927,30 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
             }
         )
 
+    def _apply_contents(self, parcel: dict, code: object) -> dict:
+        """Put the user's own contents text over the carrier's, when there is one."""
+        user_value = self.contents_store.get(code)
+        if user_value is not None:
+            parcel["contents"] = user_value
+        return parcel
+
+    @callback
+    def republish_from_cache(self) -> None:
+        """Re-publish the parcels from what is already held, issuing no request.
+
+        For a change that needs no carrier data, such as the user's contents
+        text: the scheduler, the budget and the queue are left alone.
+        """
+        codes = self._tracked()
+        if not codes:
+            return
+        raws = [
+            self._raw_cache.get(code) or {"requestedTrackingNumber": code}
+            for code in codes
+        ]
+        self.data = self._publish(raws)
+        self.async_update_listeners()
+
     def _publish(self, raws: list[dict]) -> list[dict]:
         """Normalise raw payloads into the active/delivered lists and events.
 
@@ -940,12 +966,15 @@ class UPSCoordinator(DataUpdateCoordinator[list[dict]]):
         # this is a lookup, not I/O.
         home_time_zone = dt_util.get_default_time_zone()
         normalized = [
-            normalize_parcel(
-                raw,
-                include_history=include_history,
-                locale=self._locale,
-                home_country=self._home_country,
-                home_time_zone=home_time_zone,
+            self._apply_contents(
+                normalize_parcel(
+                    raw,
+                    include_history=include_history,
+                    locale=self._locale,
+                    home_country=self._home_country,
+                    home_time_zone=home_time_zone,
+                ),
+                raw.get("requestedTrackingNumber"),
             )
             for raw in raws
         ]

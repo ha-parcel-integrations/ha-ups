@@ -227,6 +227,9 @@ the one `async_redact_data` cannot reach.
   `pickup` parcels not yet at the point (not `at_pickup_point`, not
   `returning`); it reads 0 until a real parcel shows `isDeliveredToUAP` /
   `isPickedUpByCustomer` before arrival, which is still pending.
+- `contents` is `None` from the carrier; only the user fills it
+  (`ups.update_contents`, overlaid in `_publish`), and setting it must never
+  trigger a fetch — it republishes from the cache.
 - `next_delivery` skips a parcel whose window has ended; the calendar shows a
   00:00:00–23:59:59 window as an all-day event.
 

@@ -13,6 +13,7 @@ from homeassistant.helpers.storage import Store
 
 from .api import UPSApiClient
 from .const import PLATFORMS, STORAGE_KEY, STORAGE_VERSION
+from .contents import ContentsStore
 from .coordinator import UPSCoordinator
 from .services import async_setup_services, async_unload_services
 
@@ -57,6 +58,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: UPSConfigEntry) -> bool:
         # a cooldown only rest clears. Parcels come from the cache, or as
         # placeholders showing unknown, and the first real request waits for
         # the request budget like every other one.
+        await coordinator.contents_store.async_load()
         await coordinator.async_load_cache()
         if coordinator.seed_from_cache():
             _LOGGER.debug(
@@ -101,7 +103,8 @@ async def _async_options_updated(hass: HomeAssistant, entry: UPSConfigEntry) -> 
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: UPSConfigEntry) -> None:
-    """Delete the persisted payload cache when the entry is removed."""
+    """Delete the persisted payload cache and the user's contents on removal."""
+    await ContentsStore(hass, entry.entry_id).async_remove()
     await Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}.{entry.entry_id}").async_remove()
 
 

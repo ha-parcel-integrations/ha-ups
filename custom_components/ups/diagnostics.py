@@ -24,6 +24,7 @@ TO_REDACT = {
     "barcode",
     "sender",
     "receiver",
+    "contents",
     "url",
     # the tracking number, however UPS's own payload names it
     "trackingNumber",

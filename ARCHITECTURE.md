@@ -264,6 +264,11 @@ the coordinator (`track_parcel`, an options change,
 `homeassistant.update_entity`) reaches `async_request_refresh()` and simply
 finds no token.
 
+### Contents never cost a request
+The user's `contents` text lives in a per-entry `ContentsStore`, overlaid in
+`_publish`; setting it calls `republish_from_cache()`, never the refresh path,
+so it neither spends budget nor touches the scheduler.
+
 ### A failed cycle never raises `UpdateFailed`
 Raising discards everything the cycle built and takes the entities unavailable,
 which is the opposite of what the placeholders are for. Every tracked code is
